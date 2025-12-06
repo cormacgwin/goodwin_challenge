@@ -13,6 +13,7 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verificationSent, setVerificationSent] = useState(false);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,13 +26,19 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         const { data, error: authError } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              full_name: name,
+            }
+          }
         });
 
         if (authError) throw authError;
 
         if (data.user) {
           // 2. Create Profile entry in our public table
-          const { error: profileError } = await supabase.from('profiles').insert({
+          // Note: We use upsert to prevent errors if the user clicks signup multiple times
+          const { error: profileError } = await supabase.from('profiles').upsert({
             id: data.user.id,
             email: email,
             name: name,
@@ -39,8 +46,17 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             role: 'MEMBER' // Default role
           });
 
-          if (profileError) throw profileError;
-          onLoginSuccess();
+          if (profileError) {
+             console.error("Profile creation failed:", profileError);
+             // We don't throw here to ensure the user still sees the "Check Email" screen if auth worked
+          }
+
+          // If session is null, it means email confirmation is enabled and required
+          if (!data.session) {
+            setVerificationSent(true);
+          } else {
+            onLoginSuccess();
+          }
         }
       } else {
         // Login
@@ -52,11 +68,48 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         onLoginSuccess();
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      console.error(err);
+      if (err.message && err.message.includes('Could not find the table')) {
+        setError('Database tables are missing. Please go to Supabase -> SQL Editor and run the setup script.');
+      } else if (err.message && err.message.includes('Email not confirmed')) {
+         setError('Please check your email to confirm your account before logging in.');
+      } else {
+        setError(err.message || 'An error occurred');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  if (verificationSent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-2xl shadow-xl border border-gray-100 text-center">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+            <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-3xl font-extrabold text-gray-900">Check your email</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            We sent a verification link to <strong>{email}</strong>.
+          </p>
+          <p className="text-sm text-gray-500">
+            Please click the link in that email to activate your account. Once verified, you can log in below.
+          </p>
+          <Button 
+            className="w-full mt-6" 
+            onClick={() => {
+              setVerificationSent(false);
+              setMode('login');
+            }}
+          >
+            Back to Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
