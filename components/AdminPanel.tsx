@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { ChallengeSettings, Habit, User, Team } from '../types';
 import { Button } from './Button';
-import { Trash2, Plus, Calendar, Settings } from 'lucide-react';
+import { Trash2, Plus, Calendar, Settings, Copy, Check, Share2, Mail } from 'lucide-react';
 
 interface AdminPanelProps {
   settings: ChallengeSettings;
@@ -30,6 +31,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newHabitName, setNewHabitName] = useState('');
   const [newHabitPoints, setNewHabitPoints] = useState(5);
   const [newHabitCat, setNewHabitCat] = useState<Habit['category']>('health');
+  
+  // Invite state
+  const [copied, setCopied] = useState(false);
+  const inviteUrl = window.location.origin;
 
   const handleAddHabit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +48,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       setNewHabitName('');
     }
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy', err);
+    }
+  };
+
+  const shareNative = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join The Challenge',
+          text: `Come join our family habit challenge! Sign up here: ${inviteUrl}`,
+          url: inviteUrl,
+        });
+      } catch (err) {
+        console.error('Error sharing', err);
+      }
+    } else {
+      copyToClipboard();
+    }
+  };
+
+  const emailInvite = () => {
+    const subject = encodeURIComponent("Join The Challenge");
+    const body = encodeURIComponent(`Come join our family habit challenge! Create an account here:\n\n${inviteUrl}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
 
   return (
@@ -100,14 +137,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   />
                </div>
             </div>
-             <div className="flex items-center justify-between py-4 bg-gray-50 px-4 rounded-lg">
+            
+            {/* INVITE SECTION */}
+             <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 space-y-4">
                 <div>
-                   <h4 className="text-sm font-bold text-gray-900">Invite Link</h4>
-                   <p className="text-xs text-gray-500">Share this with family to join.</p>
+                   <h4 className="text-sm font-bold text-gray-900 flex items-center">
+                     <Share2 size={16} className="mr-2 text-indigo-600"/> Invite Participants
+                   </h4>
+                   <p className="text-xs text-gray-500 mt-1">Send this link to family members so they can join.</p>
                 </div>
-                <Button variant="secondary" size="sm" onClick={() => alert("Copied to clipboard: https://habitsync.app/join/family-123")}>
-                   Copy Link
-                </Button>
+                
+                <div className="flex space-x-2">
+                   <input 
+                      type="text" 
+                      readOnly 
+                      value={inviteUrl} 
+                      className="flex-1 block w-full border-gray-300 rounded-md text-sm text-gray-500 bg-gray-100 px-3"
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                   />
+                   <Button variant="secondary" size="sm" onClick={copyToClipboard} className="w-24">
+                      {copied ? <span className="flex items-center text-green-600"><Check size={14} className="mr-1"/> Copied</span> : <span className="flex items-center"><Copy size={14} className="mr-1"/> Copy</span>}
+                   </Button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                   {/* Native Share (Mobile) */}
+                   <Button variant="primary" size="sm" onClick={shareNative} className="w-full flex items-center justify-center">
+                      <Share2 size={14} className="mr-2" /> Share App
+                   </Button>
+                   
+                   {/* Email */}
+                   <Button variant="secondary" size="sm" onClick={emailInvite} className="w-full flex items-center justify-center">
+                      <Mail size={14} className="mr-2" /> Email Invite
+                   </Button>
+                </div>
              </div>
           </div>
         )}

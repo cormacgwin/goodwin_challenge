@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, Habit, Log, Team, ChallengeSettings } from '../types';
-import { Check, Calendar, Trophy, ChevronLeft, ChevronRight, Info, Clock, Flag } from 'lucide-react';
+import { Check, Flag, ChevronLeft, ChevronRight, Trophy, Flame, Star } from 'lucide-react';
 
 interface HabitTrackerProps {
   user: User;
@@ -23,17 +23,10 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   onNavigate
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewDate, setViewDate] = useState(new Date()); // Controls the month currently being viewed
 
   const getDayKey = (d: Date) => d.toISOString().split('T')[0];
-
-  const handleDateChange = (days: number) => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + days);
-    setCurrentDate(newDate);
-  };
-
   const dateKey = getDayKey(currentDate);
-  const isToday = dateKey === getDayKey(new Date());
 
   // --- PROGRESS WIDGET LOGIC ---
   const getChallengeProgress = () => {
@@ -41,7 +34,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const end = new Date(settings.endDate);
     const now = new Date();
     
-    // Normalize times to midnight to avoid partial day weirdness in calculation
+    // Normalize
     start.setHours(0,0,0,0);
     end.setHours(23,59,59,999);
     now.setHours(0,0,0,0);
@@ -49,7 +42,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const totalDuration = end.getTime() - start.getTime();
     const elapsed = now.getTime() - start.getTime();
     
-    // Calculate percentage, clamped between 0 and 100
     let percent = 0;
     if (totalDuration > 0) {
       percent = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
@@ -64,9 +56,10 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   const { percent, daysLeft, currentDayNum } = getChallengeProgress();
 
-  const calculateDailyPoints = () => {
+  // --- STATS LOGIC ---
+  const calculateDailyPoints = (dateStr: string) => {
     return habits.reduce((acc, habit) => {
-      const isCompleted = logs.some(l => l.userId === user.id && l.habitId === habit.id && l.date === dateKey && l.completed);
+      const isCompleted = logs.some(l => l.userId === user.id && l.habitId === habit.id && l.date === dateStr && l.completed);
       return acc + (isCompleted ? habit.points : 0);
     }, 0);
   };
@@ -77,15 +70,10 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     let streak = 0;
     let checkDate = new Date(today);
     
-    // Check if any activity today
     const todayKey = getDayKey(today);
-    const hasActivityToday = logs.some(l => l.userId === user.id && l.date === todayKey);
-    
-    if (hasActivityToday) streak = 1;
+    if (calculateDailyPoints(todayKey) > 0) streak = 1;
 
-    // Check yesterday backwards
     checkDate.setDate(checkDate.getDate() - 1);
-    
     while (true) {
         const key = getDayKey(checkDate);
         const hasActivity = logs.some(l => l.userId === user.id && l.date === key);
@@ -99,29 +87,60 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return streak;
   };
 
-  const completedCount = habits.filter(h => logs.some(l => l.userId === user.id && l.habitId === h.id && l.date === dateKey)).length;
+  // --- CALENDAR WIDGET LOGIC ---
+  const getDaysInMonth = (year: number, month: number) => {
+    const date = new Date(year, month, 1);
+    const days = [];
+    while (date.getMonth() === month) {
+      days.push(new Date(date));
+      date.setDate(date.getDate() + 1);
+    }
+    return days;
+  };
 
-  // Sorting Logic: 
-  // 1. Incomplete habits first (sorted by points descending)
-  // 2. Completed habits last
+  const changeMonth = (offset: number) => {
+    const newDate = new Date(viewDate);
+    newDate.setMonth(newDate.getMonth() + offset);
+    setViewDate(newDate);
+  };
+
+  const getCalendarGrid = () => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    
+    // Adjust so Monday is first day (0 index in our mapping)
+    // JS getDay(): 0=Sun, 1=Mon... 
+    // We want 0=Mon, 1=Tue... 6=Sun
+    const dayOfWeek = firstDay.getDay(); 
+    const offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+    const days = getDaysInMonth(year, month);
+    const grid: (Date | null)[] = Array(offset).fill(null);
+    return [...grid, ...days];
+  };
+
+  const getDailyCompletionPercent = (d: Date) => {
+    const k = getDayKey(d);
+    if (habits.length === 0) return 0;
+    const completed = logs.filter(l => l.userId === user.id && l.date === k && l.completed).length;
+    return (completed / habits.length) * 100;
+  };
+
+  // --- SORTING ---
   const sortedHabits = [...habits].sort((a, b) => {
     const isCompletedA = logs.some(l => l.userId === user.id && l.habitId === a.id && l.date === dateKey && l.completed);
     const isCompletedB = logs.some(l => l.userId === user.id && l.habitId === b.id && l.date === dateKey && l.completed);
 
-    if (isCompletedA === isCompletedB) {
-      // Both completed or both incomplete -> Sort by points descending
-      return b.points - a.points;
-    }
-    // If A is completed (true) and B is not (false), A should go after B (return 1)
+    if (isCompletedA === isCompletedB) return b.points - a.points;
     return isCompletedA ? 1 : -1;
   });
 
   return (
     <div className="space-y-6">
       
-      {/* Challenge Progress Widget */}
+      {/* 1. CHALLENGE PROGRESS */}
       <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl shadow-lg p-6 text-white relative overflow-hidden">
-        {/* Decorative Background Elements */}
         <div className="absolute top-0 right-0 -mr-10 -mt-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
         <div className="absolute bottom-0 left-0 -ml-10 -mb-10 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl"></div>
 
@@ -159,97 +178,33 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         </div>
       </div>
 
-      {/* Header with Date Navigation */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Hello, {user.name.split(' ')[0]}! 👋</h1>
-          <p className="text-gray-500 flex items-center mt-1">
-             Team: <span className="font-semibold ml-1 text-indigo-600">{userTeam?.name || 'No Team'}</span>
-          </p>
-        </div>
-        
-        <div className="flex items-center space-x-4 mt-4 md:mt-0 bg-gray-50 p-2 rounded-xl">
-          <button onClick={() => handleDateChange(-1)} className="p-2 hover:bg-white rounded-lg transition-colors shadow-sm text-gray-600">
-            <ChevronLeft size={20} />
-          </button>
-          <div className="flex flex-col items-center min-w-[120px]">
-            <span className="text-sm font-semibold text-gray-900">
-              {currentDate.toLocaleDateString('en-US', { weekday: 'long' })}
-            </span>
-            <span className="text-xs text-gray-500">
-              {currentDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-            </span>
-          </div>
-          <button 
-            onClick={() => handleDateChange(1)} 
-            disabled={isToday}
-            className={`p-2 rounded-lg transition-colors shadow-sm ${isToday ? 'opacity-30 cursor-not-allowed text-gray-400' : 'hover:bg-white text-gray-600'}`}
-          >
-            <ChevronRight size={20} />
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Summary Card */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-indigo-600 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
-          <div className="relative z-10">
-            <p className="text-indigo-100 text-sm font-medium">Daily Points</p>
-            <p className="text-4xl font-bold mt-1">{calculateDailyPoints()}</p>
-          </div>
-          <Trophy className="absolute right-4 bottom-4 text-indigo-500 opacity-50 h-16 w-16" />
-        </div>
-        
-        <div 
-          onClick={() => onNavigate('profile')}
-          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center cursor-pointer hover:bg-gray-50 transition-colors group"
-        >
-            <div className={`h-12 w-12 rounded-full flex items-center justify-center mr-4 transition-colors ${completedCount === habits.length ? 'bg-green-100 text-green-600' : 'bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200'}`}>
-              <Check size={24} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Habits Done</p>
-              <p className="text-xl font-bold text-gray-900">
-                {completedCount} / {habits.length}
-              </p>
-            </div>
-        </div>
-        
-         <div 
-          onClick={() => onNavigate('profile')}
-          className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center cursor-pointer hover:bg-gray-50 transition-colors group"
-         >
-            <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 mr-4 group-hover:bg-orange-200 transition-colors">
-              <Calendar size={24} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Current Streak</p>
-              <p className="text-xl font-bold text-gray-900">
-                 {getStreak()} Days
-              </p>
-            </div>
-        </div>
-      </div>
-
-      {/* Habit List */}
+      {/* 2. YOUR HABITS LIST */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900">Your Habits</h2>
+        <div className="p-6 border-b border-gray-100 bg-gray-50">
+          <div className="flex items-center justify-between">
+            <div>
+               <h2 className="text-lg font-bold text-gray-900">Your Habits</h2>
+               <p className="text-xs text-gray-500">{currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+            </div>
+            <div className="text-xs font-medium text-gray-400 bg-white px-2 py-1 rounded border border-gray-200">
+               {sortedHabits.filter(h => logs.some(l => l.userId === user.id && l.habitId === h.id && l.date === dateKey && l.completed)).length} / {habits.length} Done
+            </div>
+          </div>
         </div>
         <div className="divide-y divide-gray-100">
           {sortedHabits.map(habit => {
             const isCompleted = logs.some(l => l.userId === user.id && l.habitId === habit.id && l.date === dateKey && l.completed);
             
             return (
-              <div key={habit.id} className={`p-4 transition-all ${isCompleted ? 'bg-gray-50 opacity-75' : 'hover:bg-gray-50'}`}>
+              <div key={habit.id} className={`p-4 transition-all ${isCompleted ? 'bg-gray-50/50' : 'hover:bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4 flex-1 min-w-0">
                     <button
                       onClick={() => onToggleHabit(habit.id, dateKey)}
                       className={`flex-shrink-0 h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
                         isCompleted 
-                          ? 'bg-indigo-600 border-indigo-600 text-white' 
-                          : 'border-gray-300 text-transparent hover:border-indigo-400'
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-md scale-105' 
+                          : 'border-gray-300 text-transparent hover:border-indigo-400 hover:scale-105'
                       }`}
                     >
                       <Check size={16} strokeWidth={3} />
@@ -259,29 +214,137 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                         {habit.name}
                       </h3>
                       <div className="flex items-center space-x-2 mt-1">
-                        <span className="flex-shrink-0 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">
+                        <span className="flex-shrink-0 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                           {habit.category}
                         </span>
-                        <span className="text-xs text-gray-500 flex items-center truncate">
-                           <Info size={12} className="mr-1 flex-shrink-0" />
-                           <span className="truncate">{habit.description}</span>
-                        </span>
+                        {habit.description && (
+                          <span className="text-xs text-gray-400 flex items-center truncate">
+                             <span className="truncate max-w-[150px]">{habit.description}</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
-                  {/* Points Box - Improved for Mobile */}
+                  {/* Points Box */}
                   <div className="ml-4 flex-shrink-0">
-                    <span className={`flex items-center justify-center w-20 py-1 rounded-full text-xs font-bold ${
-                      isCompleted ? 'bg-gray-100 text-gray-500' : 'bg-indigo-100 text-indigo-800'
+                    <span className={`flex items-center justify-center w-20 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      isCompleted ? 'bg-gray-100 text-gray-400' : 'bg-indigo-50 text-indigo-700'
                     }`}>
-                      +{habit.points} pts
+                      +{habit.points}
                     </span>
                   </div>
                 </div>
               </div>
             );
           })}
+          {sortedHabits.length === 0 && (
+             <div className="p-8 text-center text-gray-400 text-sm">
+                No habits assigned yet.
+             </div>
+          )}
         </div>
+      </div>
+
+      {/* 3. LIGHT CALENDAR WIDGET */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 overflow-hidden relative">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+             <h2 className="text-xl font-bold tracking-wide text-gray-900">
+               {viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+             </h2>
+             <div className="flex space-x-2">
+                <button onClick={() => changeMonth(-1)} className="p-2 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors text-gray-500 hover:text-indigo-600">
+                  <ChevronLeft size={20} />
+                </button>
+                <button onClick={() => changeMonth(1)} className="p-2 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors text-gray-500 hover:text-indigo-600">
+                  <ChevronRight size={20} />
+                </button>
+             </div>
+          </div>
+
+          {/* Days Header */}
+          <div className="grid grid-cols-7 mb-4">
+             {['MON','TUE','WED','THU','FRI','SAT','SUN'].map(day => (
+               <div key={day} className="text-center text-xs font-bold text-gray-400 tracking-wider">
+                 {day}
+               </div>
+             ))}
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="grid grid-cols-7 gap-y-4 md:gap-y-6">
+             {getCalendarGrid().map((date, idx) => {
+               if (!date) return <div key={`empty-${idx}`}></div>;
+
+               const isSelected = getDayKey(date) === dateKey;
+               const percentComplete = getDailyCompletionPercent(date);
+               
+               // SVG Ring Config
+               const radius = 18;
+               const circumference = 2 * Math.PI * radius;
+               const offset = circumference - (percentComplete / 100) * circumference;
+               
+               return (
+                 <div key={idx} className="flex flex-col items-center justify-center">
+                    <button 
+                      onClick={() => setCurrentDate(date)}
+                      className="relative w-12 h-12 flex items-center justify-center group focus:outline-none"
+                    >
+                       {/* SVG Progress Ring */}
+                       <svg className="absolute inset-0 w-full h-full -rotate-90 transform" viewBox="0 0 48 48">
+                          {/* Track */}
+                          <circle 
+                            cx="24" cy="24" r={radius} 
+                            stroke="#f3f4f6" strokeWidth="4" fill="none" 
+                          />
+                          {/* Progress */}
+                          <circle 
+                            cx="24" cy="24" r={radius} 
+                            stroke={percentComplete > 0 ? "#4f46e5" : "transparent"} strokeWidth="4" fill="none" 
+                            strokeDasharray={circumference} 
+                            strokeDashoffset={offset} 
+                            strokeLinecap="round"
+                            className="transition-all duration-500 ease-out"
+                          />
+                       </svg>
+
+                       {/* Date Text & Selection Background */}
+                       <div className={`
+                          w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium z-10 transition-all duration-200
+                          ${isSelected 
+                            ? 'bg-indigo-600 text-white shadow-md scale-105' 
+                            : 'text-gray-700 hover:bg-gray-50'
+                          }
+                       `}>
+                          {date.getDate()}
+                       </div>
+                    </button>
+                 </div>
+               );
+             })}
+          </div>
+      </div>
+
+      {/* 4. STATS SUMMARY (Compact) */}
+      <div className="grid grid-cols-2 gap-4">
+         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
+             <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+               <Trophy size={20} />
+             </div>
+             <div>
+               <p className="text-xs text-gray-500 font-bold uppercase tracking-wide">Points Today</p>
+               <p className="text-xl font-black text-gray-900">{calculateDailyPoints(dateKey)}</p>
+             </div>
+         </div>
+         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
+             <div className="h-10 w-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
+               <Flame size={20} />
+             </div>
+             <div>
+               <p className="text-xs text-gray-500 font-bold uppercase tracking-wide">Streak</p>
+               <p className="text-xl font-black text-gray-900">{getStreak()} Days</p>
+             </div>
+         </div>
       </div>
     </div>
   );
