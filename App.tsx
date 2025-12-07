@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { dataProvider } from './services/dataProvider';
 import { supabase } from './services/supabaseClient';
@@ -7,6 +8,7 @@ import { Layout } from './components/Layout';
 import { HabitTracker } from './components/HabitTracker';
 import { Leaderboard } from './components/Leaderboard';
 import { AdminPanel } from './components/AdminPanel';
+import { Profile } from './components/Profile';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState | null>(null);
@@ -14,7 +16,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
-    setLoading(true);
     try {
       const data = await dataProvider.getInitialState();
       setState(data);
@@ -26,20 +27,42 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    // Initial fetch
-    fetchData();
+    let mounted = true;
 
-    // Listen for auth changes (login/logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      fetchData();
+    const init = async () => {
+      // 1. Check for existing session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (mounted) {
+        if (session) {
+           await fetchData();
+        } else {
+           setLoading(false);
+        }
+      }
+    };
+
+    init();
+
+    // 2. Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN') {
+        setLoading(true);
+        fetchData();
+      } else if (event === 'SIGNED_OUT') {
+        setState(null);
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setState(null);
   };
 
   if (loading) {
@@ -52,7 +75,7 @@ const App: React.FC = () => {
 
   // If we have state but no current user, show Auth
   if (!state?.currentUser) {
-    return <Auth onLoginSuccess={fetchData} />;
+    return <Auth onLoginSuccess={() => {/* handled by auth listener */}} />;
   }
 
   return (
@@ -69,11 +92,13 @@ const App: React.FC = () => {
             habits={state.habits}
             logs={state.logs}
             userTeam={state.teams.find(t => t.id === state.currentUser?.teamId)}
+            settings={state.settings}
             onToggleHabit={async (habitId, date) => {
               if (!state.currentUser) return;
               const newState = await dataProvider.toggleLog(state.currentUser.id, habitId, date, state.logs);
               setState(newState);
             }}
+            onNavigate={setCurrentView}
           />
         </div>
       )}
@@ -84,6 +109,29 @@ const App: React.FC = () => {
           users={state.users}
           logs={state.logs}
           habits={state.habits}
+        />
+      )}
+
+      {currentView === 'profile' && (
+        <Profile
+          user={state.currentUser}
+          logs={state.logs}
+          habits={state.habits}
+          settings={state.settings}
+          onUpdateAvatar={async (url) => {
+            if (!state.currentUser) return;
+            const newState = await dataProvider.updateUserAvatar(state.currentUser.id, url);
+            setState(newState);
+          }}
+          onUpdateRules={async (rules) => {
+            const newState = await dataProvider.updateSettings({ ...state.settings, rules });
+            setState(newState);
+          }}
+          onToggleHistory={async (habitId, date) => {
+             if (!state.currentUser) return;
+             const newState = await dataProvider.toggleLog(state.currentUser.id, habitId, date, state.logs);
+             setState(newState);
+          }}
         />
       )}
 

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { User, Role } from '../types';
 import { LayoutDashboard, BarChart3, Settings, LogOut, Medal } from 'lucide-react';
@@ -15,15 +16,15 @@ export const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, o
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
       {/* Mobile Header */}
       <div className="md:hidden bg-white border-b border-gray-200 p-4 flex items-center justify-between sticky top-0 z-20">
-         <span className="font-bold text-xl text-indigo-600">HabitSync</span>
+         <span className="font-bold text-xl text-indigo-600">The Challenge</span>
          <button onClick={onLogout} className="text-gray-500"><LogOut size={20} /></button>
       </div>
 
       {/* Sidebar Navigation */}
       <div className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 h-screen sticky top-0">
         <div className="p-6">
-          <h1 className="text-2xl font-extrabold text-indigo-600 tracking-tight">HabitSync</h1>
-          <p className="text-xs text-gray-500 mt-1">Family Challenge Tracker</p>
+          <h1 className="text-2xl font-extrabold text-indigo-600 tracking-tight">The Challenge</h1>
+          <p className="text-xs text-gray-500 mt-1">Family Habit Tracker</p>
         </div>
         
         <nav className="flex-1 px-4 space-y-1">
@@ -52,13 +53,22 @@ export const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, o
         </nav>
 
         <div className="p-4 border-t border-gray-200">
-           <div className="flex items-center mb-4">
-              <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full bg-gray-200" />
+           <button 
+              onClick={() => onNavigate('profile')}
+              className="flex items-center mb-4 w-full text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
+           >
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full bg-gray-200 object-cover" />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs font-bold">
+                  {user.name.charAt(0)}
+                </div>
+              )}
               <div className="ml-3">
                  <p className="text-sm font-medium text-gray-900 truncate w-32">{user.name}</p>
                  <p className="text-xs text-gray-500 capitalize">{user.role.toLowerCase()}</p>
               </div>
-           </div>
+           </button>
            <button 
             onClick={onLogout}
             className="w-full flex items-center justify-center px-3 py-2 text-xs font-medium text-gray-500 hover:text-red-600 transition-colors"
@@ -76,9 +86,19 @@ export const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, o
           <button onClick={() => onNavigate('leaderboard')} className={`p-2 rounded-lg ${currentView === 'leaderboard' ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500'}`}>
             <BarChart3 size={24} />
           </button>
-           {user.role === Role.ADMIN && (
+           {user.role === Role.ADMIN ? (
             <button onClick={() => onNavigate('admin')} className={`p-2 rounded-lg ${currentView === 'admin' ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500'}`}>
               <Settings size={24} />
+            </button>
+          ) : (
+            <button onClick={() => onNavigate('profile')} className={`p-2 rounded-lg ${currentView === 'profile' ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500'}`}>
+               <div className="h-6 w-6 rounded-full overflow-hidden border border-gray-300 bg-gray-100 flex items-center justify-center">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                     <span className="text-xs font-bold text-gray-500">{user.name.charAt(0)}</span>
+                  )}
+               </div>
             </button>
           )}
       </div>

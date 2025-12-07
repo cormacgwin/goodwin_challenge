@@ -51,11 +51,18 @@ export const dataProvider = {
       teams: teams || [],
       habits: habits || [],
       logs,
-      settings: settings || {
+      settings: settings ? {
+        name: settings.name,
+        startDate: settings.start_date,
+        endDate: settings.end_date,
+        isActive: settings.is_active,
+        rules: settings.rules || '1. Log your habits daily.\n2. Be honest!'
+      } : {
         name: 'New Challenge',
         startDate: new Date().toISOString(),
         endDate: new Date().toISOString(),
-        isActive: true
+        isActive: true,
+        rules: '1. Log your habits daily.\n2. Be honest!'
       }
     };
   },
@@ -80,7 +87,8 @@ export const dataProvider = {
        name: settings.name,
        start_date: settings.startDate,
        end_date: settings.endDate,
-       is_active: settings.isActive
+       is_active: settings.isActive,
+       rules: settings.rules
     }).eq('id', 1);
     
     if (error) console.error('Error updating settings:', error);
@@ -90,6 +98,12 @@ export const dataProvider = {
   async updateUserTeam(userId: string, teamId: string) {
     const { error } = await supabase.from('profiles').update({ team_id: teamId }).eq('id', userId);
     if (error) console.error('Error updating user team:', error);
+    return this.getInitialState();
+  },
+
+  async updateUserAvatar(userId: string, avatarUrl: string) {
+    const { error } = await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', userId);
+    if (error) console.error('Error updating avatar:', error);
     return this.getInitialState();
   },
 

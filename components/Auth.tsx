@@ -36,19 +36,22 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         if (authError) throw authError;
 
         if (data.user) {
-          // 2. Create Profile entry in our public table
-          // Note: We use upsert to prevent errors if the user clicks signup multiple times
+          // 2. Check if this is the FIRST user. If so, make them ADMIN.
+          const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+          const isFirstUser = count === 0;
+          const assignedRole = isFirstUser ? 'ADMIN' : 'MEMBER';
+
+          // 3. Create Profile entry
           const { error: profileError } = await supabase.from('profiles').upsert({
             id: data.user.id,
             email: email,
             name: name,
             avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
-            role: 'MEMBER' // Default role
+            role: assignedRole
           });
 
           if (profileError) {
              console.error("Profile creation failed:", profileError);
-             // We don't throw here to ensure the user still sees the "Check Email" screen if auth worked
           }
 
           // If session is null, it means email confirmation is enabled and required
@@ -81,6 +84,25 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  const handleResendEmail = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email,
+        options: {
+          emailRedirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+      alert(`Verification email resent to ${email}`);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (verificationSent) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -97,15 +119,26 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           <p className="text-sm text-gray-500">
             Please click the link in that email to activate your account. Once verified, you can log in below.
           </p>
-          <Button 
-            className="w-full mt-6" 
-            onClick={() => {
-              setVerificationSent(false);
-              setMode('login');
-            }}
-          >
-            Back to Login
-          </Button>
+          
+          <div className="space-y-3 mt-6">
+            <Button 
+              className="w-full" 
+              onClick={() => {
+                setVerificationSent(false);
+                setMode('login');
+              }}
+            >
+              Back to Login
+            </Button>
+            
+            <button 
+              onClick={handleResendEmail}
+              className="text-xs text-indigo-600 hover:text-indigo-800 underline"
+              disabled={loading}
+            >
+              Resend Verification Email
+            </button>
+          </div>
         </div>
       </div>
     );

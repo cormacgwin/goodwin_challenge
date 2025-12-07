@@ -1,3 +1,4 @@
+
 export enum Role {
   ADMIN = 'ADMIN',
   MEMBER = 'MEMBER'
@@ -40,6 +41,7 @@ export interface ChallengeSettings {
   startDate: string;
   endDate: string;
   isActive: boolean;
+  rules: string;
 }
 
 export interface AppState {

@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Team, User, Log, Habit } from '../types';
-import { Trophy, Users } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 
 interface LeaderboardProps {
   teams: Team[];
@@ -31,7 +32,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
     name: team.name,
     score: getTeamScore(team.id),
     color: team.color,
-    members: users.filter(u => u.teamId === team.id).length
+    members: users.filter(u => u.teamId === team.id),
+    memberCount: users.filter(u => u.teamId === team.id).length
   })).sort((a, b) => b.score - a.score);
 
   return (
@@ -41,17 +43,18 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
           <Trophy className="mr-2 text-yellow-500" /> Team Standings
         </h2>
         
-        <div className="h-[300px] w-full">
+        {/* Vertical Bars: X Axis = Name, Y Axis = Score */}
+        <div className="h-[350px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-              <XAxis type="number" hide />
-              <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12}} />
+            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12, fontWeight: 600}} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} />
               <Tooltip 
-                cursor={{fill: 'transparent'}}
+                cursor={{fill: '#f3f4f6'}}
                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
               />
-              <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={32}>
+              <Bar dataKey="score" radius={[4, 4, 0, 0]} barSize={60}>
                 {data.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
@@ -63,25 +66,46 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {data.map((team, idx) => (
-          <div key={team.name} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
-             <div className="flex items-center">
-                <span className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full font-bold mr-3 ${
-                  idx === 0 ? 'bg-yellow-100 text-yellow-700' :
-                  idx === 1 ? 'bg-gray-100 text-gray-700' :
-                  'bg-orange-50 text-orange-800'
-                }`}>
-                  {idx + 1}
-                </span>
-                <div>
-                   <h3 className="font-bold text-gray-900">{team.name}</h3>
-                   <div className="flex items-center text-xs text-gray-500 mt-0.5">
-                     <Users size={12} className="mr-1" /> {team.members} Members
-                   </div>
-                </div>
+          <div key={team.name} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+             <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-4">
+                 <div className="flex items-center">
+                    <span className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full font-bold mr-3 ${
+                      idx === 0 ? 'bg-yellow-100 text-yellow-700' :
+                      idx === 1 ? 'bg-gray-100 text-gray-700' :
+                      'bg-orange-50 text-orange-800'
+                    }`}>
+                      {idx + 1}
+                    </span>
+                    <div>
+                       <h3 className="font-bold text-gray-900 text-lg">{team.name}</h3>
+                       <p className="text-sm text-gray-500">{team.memberCount} Members</p>
+                    </div>
+                 </div>
+                 <div className="text-right">
+                   <span className="block text-2xl font-bold text-indigo-600">{team.score}</span>
+                   <span className="text-xs text-gray-400">POINTS</span>
+                 </div>
              </div>
-             <div className="text-right">
-               <span className="block text-2xl font-bold text-indigo-600">{team.score}</span>
-               <span className="text-xs text-gray-400">POINTS</span>
+             
+             {/* Team Members List */}
+             <div>
+               <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Team Members</h4>
+               <div className="space-y-2">
+                 {team.members.length > 0 ? team.members.map(member => (
+                   <div key={member.id} className="flex items-center text-sm text-gray-700 p-2 hover:bg-gray-50 rounded-lg">
+                     {member.avatarUrl ? (
+                        <img src={member.avatarUrl} alt="" className="h-6 w-6 rounded-full mr-2 bg-gray-200 object-cover" />
+                     ) : (
+                        <div className="h-6 w-6 rounded-full mr-2 bg-gray-200 flex items-center justify-center text-[10px] text-gray-500 font-bold">
+                            {member.name.charAt(0)}
+                        </div>
+                     )}
+                     {member.name}
+                   </div>
+                 )) : (
+                   <p className="text-xs text-gray-400 italic">No members assigned yet.</p>
+                 )}
+               </div>
              </div>
           </div>
         ))}
