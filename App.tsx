@@ -156,6 +156,18 @@ const App: React.FC = () => {
             const newState = await dataProvider.updateUserTeam(uid, tid);
             setState(newState);
           }}
+          onAddTeam={async (team) => {
+            const newState = await dataProvider.addTeam(team);
+            setState(newState);
+          }}
+          onRemoveTeam={async (id) => {
+            const newState = await dataProvider.removeTeam(id);
+            setState(newState);
+          }}
+          onUpdateTeam={async (team) => {
+            const newState = await dataProvider.updateTeam(team);
+            setState(newState);
+          }}
         />
       )}
     </Layout>

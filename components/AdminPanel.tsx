@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { ChallengeSettings, Habit, User, Team } from '../types';
 import { Button } from './Button';
-import { Trash2, Plus, Calendar, Settings, Copy, Check, Share2, Mail } from 'lucide-react';
+import { Trash2, Plus, Share2, Copy, Check, Mail, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface AdminPanelProps {
   settings: ChallengeSettings;
@@ -13,6 +13,9 @@ interface AdminPanelProps {
   onAddHabit: (h: Habit) => void;
   onRemoveHabit: (id: string) => void;
   onUpdateUserTeam: (userId: string, teamId: string) => void;
+  onAddTeam: (team: Team) => void;
+  onRemoveTeam: (teamId: string) => void;
+  onUpdateTeam: (team: Team) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -24,6 +27,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onAddHabit,
   onRemoveHabit,
   onUpdateUserTeam,
+  onAddTeam,
+  onRemoveTeam,
+  onUpdateTeam
 }) => {
   const [activeTab, setActiveTab] = useState<'settings' | 'habits' | 'teams'>('settings');
   
@@ -32,6 +38,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newHabitPoints, setNewHabitPoints] = useState(5);
   const [newHabitCat, setNewHabitCat] = useState<Habit['category']>('health');
   
+  // Local state for new team form
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamColor, setNewTeamColor] = useState('#4f46e5');
+
   // Invite state
   const [copied, setCopied] = useState(false);
   const inviteUrl = window.location.origin;
@@ -48,6 +58,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       setNewHabitName('');
     }
+  };
+
+  const handleAddTeam = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newTeamName) {
+      // Default order is last
+      const maxOrder = teams.length > 0 ? Math.max(...teams.map(t => t.order)) : 0;
+      onAddTeam({
+        id: `t_${Date.now()}`,
+        name: newTeamName,
+        color: newTeamColor,
+        members: [],
+        order: maxOrder + 1
+      });
+      setNewTeamName('');
+    }
+  };
+
+  const handleMoveTeam = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === teams.length - 1) return;
+
+    const otherIndex = direction === 'up' ? index - 1 : index + 1;
+    const teamA = teams[index];
+    const teamB = teams[otherIndex];
+
+    // Swap orders
+    const orderA = teamA.order;
+    const orderB = teamB.order;
+
+    onUpdateTeam({ ...teamA, order: orderB });
+    onUpdateTeam({ ...teamB, order: orderA });
   };
 
   const copyToClipboard = async () => {
@@ -215,40 +257,124 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         )}
 
         {activeTab === 'teams' && (
-          <div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team Assignment</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map(user => (
-                    <tr key={user.id}>
-                      <td className="px-6 py-4 whitespace-nowrap flex items-center">
-                         <img className="h-8 w-8 rounded-full mr-3" src={user.avatarUrl} alt="" />
-                         <span className="text-sm font-medium text-gray-900">{user.name}</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <select 
-                          value={user.teamId || ''} 
-                          onChange={(e) => onUpdateUserTeam(user.id, e.target.value)}
-                          className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white text-gray-900 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          <div className="space-y-8">
+            {/* MANAGE TEAMS SECTION */}
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">Manage Teams</h3>
+              <div className="space-y-3 mb-6">
+                {teams.sort((a,b) => a.order - b.order).map((team, index) => (
+                  <div key={team.id} className="flex items-center space-x-3 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    <div className="flex flex-col">
+                       <button 
+                         onClick={() => handleMoveTeam(index, 'up')}
+                         disabled={index === 0}
+                         className="p-1 text-gray-400 hover:text-indigo-600 disabled:opacity-30"
+                       >
+                         <ArrowUp size={14} />
+                       </button>
+                       <button 
+                         onClick={() => handleMoveTeam(index, 'down')}
+                         disabled={index === teams.length - 1}
+                         className="p-1 text-gray-400 hover:text-indigo-600 disabled:opacity-30"
+                       >
+                         <ArrowDown size={14} />
+                       </button>
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <label className="text-[10px] text-gray-400 font-bold uppercase mb-1">Color</label>
+                        <input 
+                            type="color" 
+                            value={team.color} 
+                            onChange={(e) => onUpdateTeam({...team, color: e.target.value})}
+                            className="h-8 w-8 rounded cursor-pointer border-none p-0 bg-transparent"
+                        />
+                    </div>
+                    <div className="flex-1">
+                        <label className="text-[10px] text-gray-400 font-bold uppercase mb-1 block">Team Name</label>
+                        <input 
+                            type="text" 
+                            value={team.name}
+                            onChange={(e) => onUpdateTeam({...team, name: e.target.value})}
+                            className="w-full bg-white border border-gray-300 rounded-md text-sm px-2 py-1.5 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900"
+                        />
+                    </div>
+                    <div className="pt-4">
+                        <button 
+                            onClick={() => onRemoveTeam(team.id)} 
+                            className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                            title="Delete Team"
                         >
-                          <option value="">Unassigned</option>
-                          {teams.map(team => (
-                            <option key={team.id} value={team.id}>{team.name}</option>
-                          ))}
-                        </select>
-                      </td>
+                            <Trash2 size={16} />
+                        </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add New Team Form */}
+              <form onSubmit={handleAddTeam} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                 <h4 className="text-xs font-bold text-gray-700 mb-3">Create New Team</h4>
+                 <div className="flex space-x-3">
+                   <div className="flex flex-col">
+                      <input 
+                          type="color" 
+                          value={newTeamColor} 
+                          onChange={(e) => setNewTeamColor(e.target.value)}
+                          className="h-10 w-10 rounded cursor-pointer border-none p-0 bg-transparent"
+                        />
+                   </div>
+                    <input 
+                      type="text" 
+                      value={newTeamName}
+                      onChange={(e) => setNewTeamName(e.target.value)}
+                      placeholder="Team Name"
+                      className="flex-1 border border-gray-300 rounded-md px-3 text-sm bg-white text-gray-900"
+                      required
+                    />
+                    <Button type="submit" size="sm">
+                       <Plus size={16} className="mr-1" /> Add
+                    </Button>
+                 </div>
+              </form>
+            </div>
+
+            {/* USER ASSIGNMENT SECTION */}
+            <div className="border-t border-gray-100 pt-6">
+              <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">User Assignments</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team Assignment</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {users.map(user => (
+                      <tr key={user.id}>
+                        <td className="px-6 py-4 whitespace-nowrap flex items-center">
+                           <img className="h-8 w-8 rounded-full mr-3" src={user.avatarUrl} alt="" />
+                           <span className="text-sm font-medium text-gray-900">{user.name}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <select 
+                            value={user.teamId || ''} 
+                            onChange={(e) => onUpdateUserTeam(user.id, e.target.value)}
+                            className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white text-gray-900 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          >
+                            <option value="">Unassigned</option>
+                            {teams.map(team => (
+                              <option key={team.id} value={team.id}>{team.name}</option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

@@ -18,6 +18,7 @@ export interface Team {
   name: string;
   color: string;
   members: string[]; // User IDs
+  order: number;
 }
 
 export interface Habit {

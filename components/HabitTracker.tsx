@@ -221,6 +221,22 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return isCompletedA ? 1 : -1;
   });
 
+  // Custom Label for Reference Line
+  const CustomReferenceLabel = (props: any) => {
+    const { viewBox, value } = props;
+    const x = viewBox.width - 10;
+    const y = viewBox.y;
+  
+    return (
+      <g>
+        <rect x={x - 55} y={y - 11} width="55" height="22" rx="4" fill="white" fillOpacity="0.9" />
+        <text x={x - 28} y={y + 5} fill="#f97316" textAnchor="middle" fontSize="11" fontWeight="bold">
+          {value}
+        </text>
+      </g>
+    );
+  };
+
   return (
     <div className="space-y-6">
       
@@ -443,7 +459,12 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                               contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                               formatter={(value) => [`${value} pts`, 'Daily Points']}
                           />
-                          <ReferenceLine y={averagePoints} stroke="#f97316" strokeDasharray="3 3" label={{ value: `Avg: ${averagePoints}`, position: 'insideRight', fill: '#f97316', fontSize: 10 }} />
+                          <ReferenceLine 
+                              y={averagePoints} 
+                              stroke="#f97316" 
+                              strokeDasharray="3 3" 
+                              label={<CustomReferenceLabel value={`Avg: ${averagePoints}`} />}
+                          />
                           <Bar dataKey="dailyPoints" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={12} />
                       </BarChart>
                   </ResponsiveContainer>

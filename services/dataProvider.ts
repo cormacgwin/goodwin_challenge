@@ -7,13 +7,13 @@ export const dataProvider = {
   async getInitialState(): Promise<AppState> {
     const [
       { data: habits },
-      { data: teams },
+      { data: teamsData },
       { data: logsData },
       { data: settings },
       { data: profilesData }
     ] = await Promise.all([
       supabase.from('habits').select('*'),
-      supabase.from('teams').select('*'),
+      supabase.from('teams').select('*').order('order_index', { ascending: true }),
       supabase.from('logs').select('*'),
       supabase.from('settings').select('*').single(),
       supabase.from('profiles').select('*')
@@ -37,6 +37,14 @@ export const dataProvider = {
       avatarUrl: p.avatar_url
     }));
 
+    const teams: Team[] = (teamsData || []).map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      color: t.color,
+      members: [], 
+      order: t.order_index ?? 0
+    }));
+
     // Get current user session
     const { data: { session } } = await supabase.auth.getSession();
     let currentUser: User | null = null;
@@ -48,7 +56,7 @@ export const dataProvider = {
     return {
       currentUser,
       users,
-      teams: teams || [],
+      teams,
       habits: habits || [],
       logs,
       settings: settings ? {
@@ -76,8 +84,14 @@ export const dataProvider = {
   },
 
   async removeHabit(id: string) {
+    // 1. Delete associated logs first (Fixes Foreign Key Error)
+    const { error: logError } = await supabase.from('logs').delete().eq('habit_id', id);
+    if (logError) console.error('Error removing associated logs:', logError);
+    
+    // 2. Delete the habit
     const { error } = await supabase.from('habits').delete().eq('id', id);
     if (error) console.error('Error removing habit:', error);
+    
     return this.getInitialState();
   },
 
@@ -92,6 +106,38 @@ export const dataProvider = {
     }).eq('id', 1);
     
     if (error) console.error('Error updating settings:', error);
+    return this.getInitialState();
+  },
+
+  // --- TEAM MANAGEMENT ---
+
+  async addTeam(team: Team) {
+    const { error } = await supabase.from('teams').insert({
+      id: team.id,
+      name: team.name,
+      color: team.color,
+      order_index: team.order
+    });
+    if (error) console.error('Error adding team:', error);
+    return this.getInitialState();
+  },
+
+  async removeTeam(teamId: string) {
+    // Unassign users first to avoid FK errors
+    await supabase.from('profiles').update({ team_id: null }).eq('team_id', teamId);
+    
+    const { error } = await supabase.from('teams').delete().eq('id', teamId);
+    if (error) console.error('Error removing team:', error);
+    return this.getInitialState();
+  },
+
+  async updateTeam(team: Team) {
+    const { error } = await supabase.from('teams').update({
+      name: team.name,
+      color: team.color,
+      order_index: team.order
+    }).eq('id', team.id);
+    if (error) console.error('Error updating team:', error);
     return this.getInitialState();
   },
 
@@ -114,12 +160,10 @@ export const dataProvider = {
   },
 
   async deleteAccount(userId: string) {
-    // Note: This removes the profile entry. Supabase Auth user deletion requires Admin API, 
-    // so for this client-side app, removing the profile effectively "deletes" them from the game.
     const { error } = await supabase.from('profiles').delete().eq('id', userId);
     if (error) console.error('Error deleting account:', error);
     await supabase.auth.signOut();
-    return null; // Triggers a reload in App.tsx due to null state
+    return null;
   },
 
   async toggleLog(userId: string, habitId: string, date: string, currentLogs: Log[]) {
