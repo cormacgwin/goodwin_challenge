@@ -115,23 +115,22 @@ const App: React.FC = () => {
       {currentView === 'profile' && (
         <Profile
           user={state.currentUser}
-          logs={state.logs}
-          habits={state.habits}
-          settings={state.settings}
           onUpdateAvatar={async (url) => {
             if (!state.currentUser) return;
             const newState = await dataProvider.updateUserAvatar(state.currentUser.id, url);
             setState(newState);
           }}
-          onUpdateRules={async (rules) => {
-            const newState = await dataProvider.updateSettings({ ...state.settings, rules });
+          onUpdateName={async (name) => {
+            if (!state.currentUser) return;
+            const newState = await dataProvider.updateUserName(state.currentUser.id, name);
             setState(newState);
           }}
-          onToggleHistory={async (habitId, date) => {
-             if (!state.currentUser) return;
-             const newState = await dataProvider.toggleLog(state.currentUser.id, habitId, date, state.logs);
-             setState(newState);
+          onDeleteAccount={async () => {
+            if (!state.currentUser) return;
+            await dataProvider.deleteAccount(state.currentUser.id);
+            // State clear handled by auth listener
           }}
+          onLogout={handleLogout}
         />
       )}
 

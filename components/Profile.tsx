@@ -1,34 +1,28 @@
 
 import React, { useState, useRef } from 'react';
-import { User, Log, Habit, ChallengeSettings, Role } from '../types';
+import { User, Log, Habit, ChallengeSettings } from '../types';
 import { Button } from './Button';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Camera, Check, Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Camera, LogOut, Trash2, Save, User as UserIcon } from 'lucide-react';
 
 interface ProfileProps {
   user: User;
-  logs: Log[];
-  habits: Habit[];
-  settings: ChallengeSettings;
   onUpdateAvatar: (url: string) => void;
-  onUpdateRules: (rules: string) => void;
-  onToggleHistory: (habitId: string, date: string) => void;
+  onUpdateName: (name: string) => void;
+  onDeleteAccount: () => void;
+  onLogout: () => void;
 }
 
 export const Profile: React.FC<ProfileProps> = ({ 
   user, 
-  logs, 
-  habits, 
-  settings, 
   onUpdateAvatar,
-  onToggleHistory
+  onUpdateName,
+  onDeleteAccount,
+  onLogout
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'history'>('overview');
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Calendar State
-  const [calendarDate, setCalendarDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [name, setName] = useState(user.name);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   // --- AVATAR HANDLER ---
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,341 +64,138 @@ export const Profile: React.FC<ProfileProps> = ({
     }
   };
 
-  // --- STATS HELPER ---
-  const getDailyPoints = (date: string) => {
-    return habits.reduce((acc, habit) => {
-      const isCompleted = logs.some(l => l.userId === user.id && l.habitId === habit.id && l.date === date && l.completed);
-      return acc + (isCompleted ? habit.points : 0);
-    }, 0);
-  };
-
-  // --- LINE CHART DATA (Full Challenge Duration, Daily Points) ---
-  const getProgressData = () => {
-      // Create chart data spanning from Challenge Start to Challenge End
-      // If end date is very far in future, maybe cap at today + buffer? 
-      // The prompt says "spans the entire duration of the challenge". 
-      
-      const start = new Date(settings.startDate);
-      const end = new Date(settings.endDate);
-      const data = [];
-
-      // We will iterate through every day of the challenge
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateKey = d.toISOString().split('T')[0];
-          const daily = getDailyPoints(dateKey);
-          
-          // Determine if this date is in the future relative to today
-          const isFuture = d > new Date();
-
-          data.push({
-              date: dateKey,
-              shortDate: d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }),
-              dailyPoints: isFuture && daily === 0 ? null : daily, // Don't plot 0s for future days to avoid confusing drop
-          });
-      }
-      return data;
-  };
-  
-  const progressData = getProgressData();
-  
-  // Calculate totals for summary cards based on *past* data (logs)
-  const totalPoints = logs
-    .filter(l => l.userId === user.id && l.completed)
-    .reduce((acc, log) => {
-        const habit = habits.find(h => h.id === log.habitId);
-        return acc + (habit ? habit.points : 0);
-    }, 0);
-
-  // --- STREAK CALCULATION ---
-  const getStreak = () => {
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    let streak = 0;
-    let checkDate = new Date(today);
-    
-    const todayKey = today.toISOString().split('T')[0];
-    if (getDailyPoints(todayKey) > 0) {
-        streak = 1;
-    }
-    checkDate.setDate(checkDate.getDate() - 1);
-    
-    while(true) {
-        const key = checkDate.toISOString().split('T')[0];
-        if (getDailyPoints(key) > 0) {
-            streak++;
-            checkDate.setDate(checkDate.getDate() - 1);
-        } else {
-            break;
-        }
-    }
-    return streak;
-  };
-
-  // --- CALENDAR RENDERER ---
-  const renderCalendar = () => {
-    const year = calendarDate.getFullYear();
-    const month = calendarDate.getMonth();
-    
-    const firstDayOfMonth = new Date(year, month, 1);
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const startingDayOfWeek = firstDayOfMonth.getDay(); // 0 = Sun
-    
-    const days = [];
-    
-    // Empty slots for prev month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-        days.push(<div key={`empty-${i}`} className="h-10 md:h-14"></div>);
-    }
-    
-    // Days
-    for (let i = 1; i <= daysInMonth; i++) {
-        const d = new Date(year, month, i);
-        const dateKey = d.toISOString().split('T')[0];
-        const points = getDailyPoints(dateKey);
-        const isSelected = selectedDate === dateKey;
-        const isToday = dateKey === new Date().toISOString().split('T')[0];
-        
-        // Validation: Is this date within the challenge range?
-        const isWithinChallenge = dateKey >= settings.startDate && dateKey <= settings.endDate;
-
-        // Color logic
-        let bgClass = "";
-        let textClass = "";
-        let borderClass = "";
-        let cursorClass = "cursor-pointer hover:shadow-md";
-
-        if (!isWithinChallenge) {
-             bgClass = "bg-gray-100 opacity-50";
-             textClass = "text-gray-300";
-             borderClass = "border border-transparent";
-             cursorClass = "cursor-not-allowed";
-        } else if (points > 0) {
-            const maxPoints = habits.reduce((acc, h) => acc + h.points, 0);
-            if (points >= maxPoints) {
-                bgClass = "bg-green-100";
-                textClass = "text-green-700 font-bold";
-                borderClass = "border border-green-200";
-            } else {
-                bgClass = "bg-yellow-50";
-                textClass = "text-yellow-700";
-                borderClass = "border border-yellow-200";
-            }
-        } else {
-            bgClass = "bg-gray-50";
-            textClass = "text-gray-400";
-            borderClass = "border border-transparent hover:border-gray-200";
-        }
-
-        if (isSelected) {
-            bgClass = "bg-indigo-600";
-            textClass = "text-white";
-            borderClass = "shadow-lg scale-105 z-10";
-        }
-        
-        if (isToday && !isSelected) {
-            borderClass += " ring-2 ring-indigo-400 ring-offset-1";
-        }
-
-        days.push(
-            <button
-                key={dateKey}
-                disabled={!isWithinChallenge}
-                onClick={() => isWithinChallenge && setSelectedDate(dateKey)}
-                className={`h-10 md:h-14 rounded-lg flex flex-col items-center justify-center text-xs md:text-sm transition-all relative ${bgClass} ${textClass} ${borderClass} ${cursorClass}`}
-            >
-                <span>{i}</span>
-                {points > 0 && <span className="hidden md:block text-[9px] mt-1 opacity-90">{points} pts</span>}
-                {points > 0 && <div className="md:hidden w-1 h-1 rounded-full bg-current mt-0.5"></div>}
-            </button>
-        );
-    }
-    
-    return days;
+  const handleSaveName = () => {
+    onUpdateName(name);
+    setIsEditing(false);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Profile Header */}
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row items-center md:space-x-8 text-center md:text-left">
-        <div className="relative group">
-            {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt={user.name} className="h-28 w-28 rounded-full bg-gray-100 mb-4 md:mb-0 border-4 border-white shadow-md object-cover" />
-            ) : (
-                <div className="h-28 w-28 rounded-full bg-gray-200 mb-4 md:mb-0 border-4 border-white shadow-md flex items-center justify-center">
-                    <span className="text-4xl text-gray-400 font-bold">{user.name.charAt(0)}</span>
-                </div>
-            )}
-            
-            <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-1 right-0 bg-white p-2.5 rounded-full shadow-lg border border-gray-100 text-gray-600 hover:text-indigo-600 transition-colors md:mb-0 mb-4 hover:scale-105"
-                title="Upload Photo"
-            >
-                <Camera size={18} />
-            </button>
-            <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept="image/*"
-                onChange={handleFileChange}
-            />
-        </div>
-        <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-900">{user.name}</h1>
-            <p className="text-gray-500 font-medium">{user.email}</p>
-            <div className="mt-3 flex items-center justify-center md:justify-start space-x-2">
-                 <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full uppercase tracking-wide border border-indigo-100">
-                    {user.role}
-                 </span>
-            </div>
-        </div>
+    <div className="max-w-2xl mx-auto space-y-8">
+      
+      {/* HEADER */}
+      <div>
+        <h1 className="text-3xl font-extrabold text-gray-900">Account Settings</h1>
+        <p className="text-gray-500 mt-2">Manage your profile details and preferences.</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-gray-200 bg-white rounded-t-xl px-4 overflow-x-auto">
-        <button 
-          onClick={() => setActiveTab('overview')}
-          className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'overview' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-        >
-          Stats & Progress
-        </button>
-        <button 
-          onClick={() => setActiveTab('history')}
-          className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'history' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-        >
-          Calendar History
-        </button>
-      </div>
-
-      <div className="bg-white p-6 rounded-b-xl shadow-sm border border-t-0 border-gray-100 min-h-[400px]">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         
-        {/* OVERVIEW TAB */}
-        {activeTab === 'overview' && (
-            <div className="space-y-8 animate-in fade-in duration-300">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-gradient-to-br from-orange-50 to-white p-6 rounded-2xl border border-orange-100 shadow-sm">
-                        <p className="text-orange-600 font-medium text-sm flex items-center mb-2"><Calendar className="mr-2" size={16} /> Current Streak</p>
-                        <p className="text-3xl font-bold text-gray-900">{getStreak()} <span className="text-sm font-normal text-gray-500">days</span></p>
-                        <p className="text-xs text-gray-500 mt-2">Consistent daily habits</p>
+        {/* AVATAR SECTION */}
+        <div className="p-8 border-b border-gray-100 flex flex-col items-center">
+            <div className="relative group mb-6">
+                {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.name} className="h-32 w-32 rounded-full bg-gray-100 border-4 border-white shadow-md object-cover" />
+                ) : (
+                    <div className="h-32 w-32 rounded-full bg-gray-200 border-4 border-white shadow-md flex items-center justify-center">
+                        <span className="text-5xl text-gray-400 font-bold">{user.name.charAt(0)}</span>
                     </div>
-                    <div className="bg-gradient-to-br from-blue-50 to-white p-6 rounded-2xl border border-blue-100 shadow-sm">
-                         <p className="text-blue-600 font-medium text-sm mb-2">Total Points</p>
-                         <p className="text-3xl font-bold text-gray-900">{totalPoints}</p>
-                         <p className="text-xs text-gray-500 mt-2">Lifetime points earned</p>
-                    </div>
-                </div>
-
-                <div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-6">Daily Performance</h3>
-                    <div className="h-72 w-full bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={progressData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                                <XAxis 
-                                    dataKey="shortDate" 
-                                    axisLine={false} 
-                                    tickLine={false} 
-                                    tick={{fill: '#9ca3af', fontSize: 12}} 
-                                    minTickGap={30}
-                                />
-                                <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} />
-                                <Tooltip 
-                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                    formatter={(value) => [`${value} pts`, 'Daily Points']}
-                                />
-                                <Line 
-                                    type="monotone" 
-                                    dataKey="dailyPoints" 
-                                    stroke="#4f46e5" 
-                                    strokeWidth={3} 
-                                    dot={false}
-                                    activeDot={{ r: 6, fill: '#4f46e5', stroke: '#fff', strokeWidth: 2 }}
-                                    connectNulls={false}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <p className="text-xs text-gray-400 text-center mt-2">This chart shows your daily points for the entire duration of the challenge.</p>
-                </div>
+                )}
+                
+                <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute bottom-1 right-0 bg-indigo-600 p-2.5 rounded-full shadow-lg border-2 border-white text-white hover:bg-indigo-700 transition-transform hover:scale-105"
+                    title="Upload Photo"
+                >
+                    <Camera size={18} />
+                </button>
+                <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={handleFileChange}
+                />
             </div>
-        )}
+            <p className="text-sm text-gray-400">Click the camera icon to upload a photo from your library.</p>
+        </div>
 
-        {/* CALENDAR HISTORY TAB */}
-        {activeTab === 'history' && (
-             <div className="animate-in fade-in duration-300">
-                <div className="flex flex-col md:flex-row md:items-start md:space-x-8">
-                    {/* Left: Calendar Grid */}
-                    <div className="flex-1">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-gray-900">
-                                {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                            </h3>
-                            <div className="flex space-x-2">
-                                <button onClick={() => {
-                                    const d = new Date(calendarDate);
-                                    d.setMonth(d.getMonth() - 1);
-                                    setCalendarDate(d);
-                                }} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft size={20}/></button>
-                                <button onClick={() => {
-                                    const d = new Date(calendarDate);
-                                    d.setMonth(d.getMonth() + 1);
-                                    setCalendarDate(d);
-                                }} className="p-1 hover:bg-gray-100 rounded-full"><ChevronRight size={20}/></button>
-                            </div>
+        {/* DETAILS SECTION */}
+        <div className="p-8 space-y-6">
+            
+            {/* Name Input */}
+            <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Display Name</label>
+                <div className="flex space-x-2">
+                    <div className="relative flex-1">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <UserIcon size={16} className="text-gray-400" />
                         </div>
-
-                        <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2 text-center">
-                            {['S','M','T','W','T','F','S'].map((d, i) => (
-                                <div key={i} className="text-xs font-bold text-gray-400">{d}</div>
-                            ))}
-                        </div>
-                        <div className="grid grid-cols-7 gap-1 md:gap-2">
-                            {renderCalendar()}
-                        </div>
-                        <p className="text-xs text-gray-400 mt-4 text-center">Dates outside the active challenge range cannot be edited.</p>
+                        <input 
+                            type="text" 
+                            value={name}
+                            onChange={(e) => {
+                                setName(e.target.value);
+                                setIsEditing(true);
+                            }}
+                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white text-gray-900"
+                        />
                     </div>
-
-                    {/* Right: Edit Panel (Visible when date selected) */}
-                    {selectedDate && (
-                        <div className="w-full md:w-80 mt-8 md:mt-0 bg-gray-50 p-6 rounded-2xl border border-gray-100 shadow-inner relative">
-                            <button 
-                                onClick={() => setSelectedDate(null)}
-                                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-                            >
-                                <X size={20} />
-                            </button>
-                            <h4 className="font-bold text-gray-900 text-lg mb-1">
-                                {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                            </h4>
-                            <p className="text-sm text-gray-500 mb-6">Edit your habits for this day.</p>
-                            
-                            <div className="space-y-3">
-                                {habits.map(habit => {
-                                    const isCompleted = logs.some(l => l.userId === user.id && l.habitId === habit.id && l.date === selectedDate && l.completed);
-                                    return (
-                                        <button
-                                            key={habit.id}
-                                            onClick={() => onToggleHistory(habit.id, selectedDate)}
-                                            className={`w-full flex items-center justify-between p-3 rounded-xl border text-sm transition-all ${
-                                                isCompleted 
-                                                ? 'bg-white border-indigo-200 text-indigo-900 shadow-sm ring-1 ring-indigo-500' 
-                                                : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
-                                            }`}
-                                        >
-                                            <span className="font-medium">{habit.name}</span>
-                                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isCompleted ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'}`}>
-                                                {isCompleted && <Check size={12} className="text-white" />}
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                    {isEditing && (
+                        <Button onClick={handleSaveName} size="sm">
+                            <Save size={16} className="mr-2" /> Save
+                        </Button>
                     )}
                 </div>
+            </div>
+
+            {/* Email (Read Only) */}
+            <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Email Address</label>
+                <input 
+                    type="text" 
+                    value={user.email}
+                    disabled
+                    className="block w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-gray-500 sm:text-sm cursor-not-allowed"
+                />
+            </div>
+
+             {/* Role (Read Only) */}
+             <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Role</label>
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    {user.role}
+                </span>
+            </div>
+        </div>
+
+        {/* ACTIONS FOOTER */}
+        <div className="bg-gray-50 px-8 py-6 border-t border-gray-100 flex flex-col space-y-4">
+             <button 
+                onClick={onLogout}
+                className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50"
+             >
+                <LogOut size={16} className="mr-2" /> Sign Out
+             </button>
+
+             <div className="border-t border-gray-200 pt-4 mt-2">
+                {!isDeleting ? (
+                    <button 
+                        onClick={() => setIsDeleting(true)}
+                        className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                        <Trash2 size={16} className="mr-2" /> Delete Account
+                    </button>
+                ) : (
+                    <div className="bg-red-50 p-4 rounded-lg border border-red-100 text-center">
+                        <p className="text-red-800 font-medium text-sm mb-3">Are you sure? This cannot be undone.</p>
+                        <div className="flex space-x-3 justify-center">
+                            <button 
+                                onClick={() => setIsDeleting(false)}
+                                className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 font-medium"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={onDeleteAccount}
+                                className="px-3 py-1.5 bg-red-600 text-white text-xs rounded hover:bg-red-700 font-medium shadow-sm"
+                            >
+                                Yes, Delete My Account
+                            </button>
+                        </div>
+                    </div>
+                )}
              </div>
-        )}
+        </div>
       </div>
     </div>
   );

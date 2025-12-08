@@ -107,6 +107,21 @@ export const dataProvider = {
     return this.getInitialState();
   },
 
+  async updateUserName(userId: string, name: string) {
+    const { error } = await supabase.from('profiles').update({ name: name }).eq('id', userId);
+    if (error) console.error('Error updating name:', error);
+    return this.getInitialState();
+  },
+
+  async deleteAccount(userId: string) {
+    // Note: This removes the profile entry. Supabase Auth user deletion requires Admin API, 
+    // so for this client-side app, removing the profile effectively "deletes" them from the game.
+    const { error } = await supabase.from('profiles').delete().eq('id', userId);
+    if (error) console.error('Error deleting account:', error);
+    await supabase.auth.signOut();
+    return null; // Triggers a reload in App.tsx due to null state
+  },
+
   async toggleLog(userId: string, habitId: string, date: string, currentLogs: Log[]) {
     // Check if log exists
     const existing = currentLogs.find(l => l.userId === userId && l.habitId === habitId && l.date === date);
