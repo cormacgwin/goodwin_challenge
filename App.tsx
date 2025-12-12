@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { dataProvider } from './services/dataProvider';
 import { supabase } from './services/supabaseClient';
@@ -14,6 +13,11 @@ const App: React.FC = () => {
   const [state, setState] = useState<AppState | null>(null);
   const [currentView, setCurrentView] = useState('dashboard');
   const [loading, setLoading] = useState(true);
+
+  // Force the browser tab title to update
+  useEffect(() => {
+    document.title = "The Challenge";
+  }, []);
 
   const fetchData = async () => {
     try {
