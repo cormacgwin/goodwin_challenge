@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, Habit, Log, Team, ChallengeSettings } from '../types';
-import { Check, Flag, ChevronLeft, ChevronRight, Trophy, Flame, Clock } from 'lucide-react';
+import { Check, Flag, ChevronLeft, ChevronRight, Trophy, Flame, Clock, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
+import confetti from 'canvas-confetti';
 
 interface HabitTrackerProps {
   user: User;
@@ -27,6 +27,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [viewDate, setViewDate] = useState(new Date()); // Controls the month currently being viewed
   const [now, setNow] = useState(new Date()); // Live clock for countdown
   const [optimisticChecked, setOptimisticChecked] = useState<string[]>([]);
+  const [toast, setToast] = useState<{message: string, visible: boolean} | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -42,9 +43,24 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   
   const dateKey = getDayKey(currentDate);
 
+  // Sync optimistic state with real logs when they update
+  useEffect(() => {
+    setOptimisticChecked(prev => prev.filter(id => 
+      !logs.some(l => l.userId === user.id && l.habitId === id && l.date === dateKey && l.completed)
+    ));
+  }, [logs, user.id, dateKey]);
+
+  // Hide toast after 3 seconds
+  useEffect(() => {
+    if (toast?.visible) {
+      const timer = setTimeout(() => {
+        setToast(prev => prev ? { ...prev, visible: false } : null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   // --- CRITICAL DATE FIX ---
-  // Helper to parse YYYY-MM-DD string into a Local Midnight Date object
-  // ignoring timezones. e.g. "2025-01-01" -> Jan 1st 00:00:00 LOCAL
   const parseLocalDate = (dateStr: string) => {
     if (!dateStr) return new Date();
     const [y, m, d] = dateStr.split('-').map(Number);
@@ -53,11 +69,8 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   // --- PROGRESS / COUNTDOWN LOGIC ---
   const getChallengeStatus = () => {
-    // 1. Get dates relative to user's local time, not UTC
     const startDate = parseLocalDate(settings.startDate);
     const endDate = parseLocalDate(settings.endDate);
-    
-    // Set End Date to end of day (23:59:59) for countdown purposes
     endDate.setHours(23, 59, 59, 999);
 
     const nowTime = now.getTime();
@@ -67,7 +80,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const isFuture = nowTime < startTime;
     const isFinished = nowTime > endTime;
 
-    // Countdown String
     let countdownString = "";
     if (isFuture) {
       const diff = startTime - nowTime;
@@ -78,13 +90,9 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       countdownString = `${d}d ${h}h ${m}m ${s}s`;
     }
 
-    // Days Left Calc
-    // We calculate "Midnight End Date" minus "Now" to get remaining duration
     const msPerDay = 1000 * 60 * 60 * 24;
-    // We use Math.max(0) to prevent negatives
     const daysLeft = Math.ceil((endTime - nowTime) / msPerDay);
     
-    // Percent Complete
     const totalDuration = endTime - startTime;
     const elapsed = nowTime - startTime;
     let percent = 0;
@@ -92,7 +100,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       percent = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
     }
     
-    // Current Day Number
     const currentDayNum = Math.floor((nowTime - startTime) / msPerDay) + 1;
 
     return { isFuture, countdownString, percent, daysLeft: Math.max(0, daysLeft), currentDayNum, isFinished };
@@ -141,7 +148,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const today = new Date();
     today.setHours(0,0,0,0);
 
-    // Iterate through every day of the challenge
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const dKey = getDayKey(d);
         const daily = calculateDailyPoints(dKey);
@@ -201,27 +207,44 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   };
 
   // --- INTERACTION LOGIC ---
-  const handleToggleWithDelay = (habitId: string) => {
+  const handleToggle = (habitId: string) => {
     const isAlreadyCompleted = logs.some(l => l.userId === user.id && l.habitId === habitId && l.date === dateKey && l.completed);
+    
     if (isAlreadyCompleted) {
+      // Uncheck is instant
       onToggleHabit(habitId, dateKey);
     } else {
+      // Check: Instant Update + Confetti + Toast
+      
+      // 1. Confetti
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#4f46e5', '#818cf8', '#fbbf24', '#f59e0b']
+      });
+
+      // 2. Toast Calculation
+      const currentCompleted = habits.filter(h => logs.some(l => l.userId === user.id && l.habitId === h.id && l.date === dateKey && l.completed)).length;
+      // We are adding one, so new completed count is current + 1
+      const remaining = Math.max(0, habits.length - (currentCompleted + 1));
+      
+      const message = remaining === 0 
+        ? "All habits completed! Amazing work! 🎉"
+        : `Nice Work! Only ${remaining} habit${remaining === 1 ? '' : 's'} left!`;
+      
+      setToast({ message, visible: true });
+
+      // 3. Optimistic Update
       setOptimisticChecked(prev => [...prev, habitId]);
-      setTimeout(() => {
-        onToggleHabit(habitId, dateKey);
-        setOptimisticChecked(prev => prev.filter(id => id !== habitId));
-      }, 600);
+      
+      // 4. API Call
+      onToggleHabit(habitId, dateKey);
     }
   };
 
-  const sortedHabits = [...habits].sort((a, b) => {
-    const isCompletedA = logs.some(l => l.userId === user.id && l.habitId === a.id && l.date === dateKey && l.completed);
-    const isCompletedB = logs.some(l => l.userId === user.id && l.habitId === b.id && l.date === dateKey && l.completed);
-    if (isCompletedA === isCompletedB) return b.points - a.points;
-    return isCompletedA ? 1 : -1;
-  });
+  const sortedHabits = [...habits].sort((a, b) => b.points - a.points);
 
-  // Custom Label for Reference Line
   const CustomReferenceLabel = (props: any) => {
     const { viewBox, value } = props;
     const x = viewBox.width - 10;
@@ -238,8 +261,21 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       
+      {/* TOAST NOTIFICATION */}
+      {toast && (
+        <div className={`fixed bottom-20 md:bottom-8 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-500 ${toast.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+           <div className="bg-indigo-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center space-x-3 backdrop-blur-md bg-opacity-95">
+             <Trophy size={18} className="text-yellow-400" />
+             <span className="font-medium text-sm md:text-base">{toast.message}</span>
+             <button onClick={() => setToast(prev => prev ? {...prev, visible: false} : null)} className="ml-2 text-indigo-300 hover:text-white">
+                <X size={14} />
+             </button>
+           </div>
+        </div>
+      )}
+
       {/* 1. CHALLENGE PROGRESS / COUNTDOWN */}
       <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl shadow-lg p-6 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-10 -mt-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
@@ -317,10 +353,10 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4 flex-1 min-w-0">
                     <button
-                      onClick={() => handleToggleWithDelay(habit.id)}
-                      className={`flex-shrink-0 h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+                      onClick={() => handleToggle(habit.id)}
+                      className={`flex-shrink-0 h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 transform active:scale-90 ${
                         isCompleted 
-                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-md scale-105' 
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
                           : 'border-gray-300 text-transparent hover:border-indigo-400 hover:scale-105'
                       }`}
                     >
