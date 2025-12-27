@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, Habit, Log, Team, ChallengeSettings } from '../types';
-import { Check, Flag, ChevronLeft, ChevronRight, Trophy, Flame, Clock, X } from 'lucide-react';
+import { Check, Flag, ChevronLeft, ChevronRight, Trophy, Flame, Clock, X, HelpCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 import confetti from 'canvas-confetti';
 
@@ -28,6 +29,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   const [now, setNow] = useState(new Date()); // Live clock for countdown
   const [optimisticChecked, setOptimisticChecked] = useState<string[]>([]);
   const [toast, setToast] = useState<{message: string, visible: boolean} | null>(null);
+  const [activeDescriptionId, setActiveDescriptionId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -243,6 +245,11 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     }
   };
 
+  const toggleDescription = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActiveDescriptionId(prev => prev === id ? null : id);
+  };
+
   const sortedHabits = [...habits].sort((a, b) => b.points - a.points);
 
   const CustomReferenceLabel = (props: any) => {
@@ -261,7 +268,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
   };
 
   return (
-    <div className="space-y-6 relative">
+    <div className="space-y-6 relative" onClick={() => setActiveDescriptionId(null)}>
       
       {/* TOAST NOTIFICATION */}
       {toast && (
@@ -347,13 +354,14 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
             const isActuallyCompleted = logs.some(l => l.userId === user.id && l.habitId === habit.id && l.date === dateKey && l.completed);
             const isOptimisticallyCompleted = optimisticChecked.includes(habit.id);
             const isCompleted = isActuallyCompleted || isOptimisticallyCompleted;
+            const isDescriptionOpen = activeDescriptionId === habit.id;
             
             return (
               <div key={habit.id} className={`p-4 transition-all duration-500 ${isCompleted ? 'bg-gray-50/50' : 'hover:bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4 flex-1 min-w-0">
                     <button
-                      onClick={() => handleToggle(habit.id)}
+                      onClick={(e) => { e.stopPropagation(); handleToggle(habit.id); }}
                       className={`flex-shrink-0 h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 transform active:scale-90 ${
                         isCompleted 
                           ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
@@ -362,18 +370,37 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                     >
                       <Check size={16} strokeWidth={3} />
                     </button>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <h3 className={`font-medium text-gray-900 truncate transition-all duration-300 ${isCompleted ? 'line-through text-gray-400' : ''}`}>
                         {habit.name}
                       </h3>
-                      <div className="flex items-center space-x-2 mt-1">
+                      <div className="flex items-center space-x-2 mt-1 relative">
                         <span className="flex-shrink-0 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                           {habit.category}
                         </span>
+                        
                         {habit.description && (
-                          <span className="text-xs text-gray-400 flex items-center truncate">
-                             <span className="truncate max-w-[150px]">{habit.description}</span>
-                          </span>
+                          <div className="relative inline-block">
+                            <button 
+                              onClick={(e) => toggleDescription(habit.id, e)}
+                              className={`p-1 rounded-full transition-colors ${isDescriptionOpen ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400 hover:text-indigo-500 hover:bg-gray-100'}`}
+                              aria-label="Show description"
+                            >
+                              <HelpCircle size={14} />
+                            </button>
+                            
+                            {isDescriptionOpen && (
+                              <div 
+                                className="absolute left-0 bottom-full mb-2 w-64 p-3 bg-white rounded-xl shadow-xl border border-indigo-100 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="absolute left-3 -bottom-1 w-2 h-2 bg-white border-b border-r border-indigo-100 rotate-45"></div>
+                                <p className="text-xs text-gray-600 leading-relaxed font-normal">
+                                  {habit.description}
+                                </p>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -399,10 +426,10 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                {viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
              </h2>
              <div className="flex space-x-2">
-                <button onClick={() => changeMonth(-1)} className="p-2 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors text-gray-500 hover:text-indigo-600">
+                <button onClick={(e) => { e.stopPropagation(); changeMonth(-1); }} className="p-2 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors text-gray-500 hover:text-indigo-600">
                   <ChevronLeft size={20} />
                 </button>
-                <button onClick={() => changeMonth(1)} className="p-2 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors text-gray-500 hover:text-indigo-600">
+                <button onClick={(e) => { e.stopPropagation(); changeMonth(1); }} className="p-2 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors text-gray-500 hover:text-indigo-600">
                   <ChevronRight size={20} />
                 </button>
              </div>
@@ -426,7 +453,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                return (
                  <div key={idx} className="flex flex-col items-center justify-center relative">
                     <button 
-                      onClick={() => setCurrentDate(date)}
+                      onClick={(e) => { e.stopPropagation(); setCurrentDate(date); }}
                       className="relative w-12 h-12 flex items-center justify-center group focus:outline-none"
                     >
                        <svg className="absolute inset-0 w-full h-full -rotate-90 transform" viewBox="0 0 48 48">
@@ -477,7 +504,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         </div>
 
         {/* Daily Performance Graph */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100" onClick={(e) => e.stopPropagation()}>
              <h3 className="text-lg font-bold text-gray-900 mb-6">Daily Performance</h3>
              <div className="h-72 w-full bg-gray-50 rounded-2xl p-4 border border-gray-100">
                   <ResponsiveContainer width="100%" height="100%">
