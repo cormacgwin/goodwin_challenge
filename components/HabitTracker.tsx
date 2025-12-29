@@ -273,9 +273,9 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       {/* TOAST NOTIFICATION */}
       {toast && (
         <div className={`fixed bottom-20 md:bottom-8 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-500 ${toast.visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-           <div className="bg-indigo-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center space-x-3 backdrop-blur-md bg-opacity-95">
+           <div className="bg-indigo-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center space-x-3 backdrop-blur-md bg-opacity-95 border border-indigo-700">
              <Trophy size={18} className="text-yellow-400" />
-             <span className="font-medium text-sm md:text-base">{toast.message}</span>
+             <span className="font-medium text-sm md:text-base text-white">{toast.message}</span>
              <button onClick={() => setToast(prev => prev ? {...prev, visible: false} : null)} className="ml-2 text-indigo-300 hover:text-white">
                 <X size={14} />
              </button>
@@ -291,20 +291,20 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-end justify-between">
           <div className="mb-4 md:mb-0">
              <h2 className="text-lg font-medium text-indigo-100 flex items-center mb-1">
-               {isFuture ? <Clock size={18} className="mr-2" /> : <Flag size={18} className="mr-2" />}
+               {isFuture ? <Clock size={18} className="mr-2 text-indigo-100" /> : <Flag size={18} className="mr-2 text-indigo-100" />}
                {isFuture ? "Challenge Starts In" : "Challenge Progress"}
              </h2>
              
              {isFuture ? (
-               <p className="text-4xl md:text-5xl font-extrabold tracking-tight tabular-nums">
+               <p className="text-4xl md:text-5xl font-extrabold tracking-tight tabular-nums text-white">
                  {countdownString}
                </p>
              ) : (
                <>
-                 <p className="text-4xl md:text-5xl font-extrabold tracking-tight">
+                 <p className="text-4xl md:text-5xl font-extrabold tracking-tight text-white">
                    Day {currentDayNum > 0 ? currentDayNum : 0}
                  </p>
-                 <p className="text-indigo-200 text-sm mt-1 font-medium">Keep pushing forward!</p>
+                 <p className="text-indigo-100 text-sm mt-1 font-medium">Keep pushing forward!</p>
                </>
              )}
           </div>
@@ -314,17 +314,17 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                <p className="text-6xl md:text-7xl font-black text-white leading-none">
                  {daysLeft}
                </p>
-               <p className="text-indigo-200 font-bold uppercase tracking-wider text-sm mt-1">Days Left</p>
+               <p className="text-indigo-100 font-bold uppercase tracking-wider text-sm mt-1">Days Left</p>
             </div>
           )}
         </div>
 
         {!isFuture && (
           <div className="relative z-10 mt-6">
-            <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-indigo-200 mb-2">
-              <span>Start</span>
-              <span>{Math.round(percent)}% Complete</span>
-              <span>Finish</span>
+            <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-indigo-100 mb-2">
+              <span className="text-indigo-100">Start</span>
+              <span className="text-white">{Math.round(percent)}% Complete</span>
+              <span className="text-indigo-100">Finish</span>
             </div>
             <div className="w-full bg-black/20 rounded-full h-4 backdrop-blur-sm">
                <div 

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from './Button';
 import { supabase } from '../services/supabaseClient';
@@ -22,7 +23,6 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
     try {
       if (mode === 'signup') {
-        // 1. Sign up with Supabase Auth
         const { data, error: authError } = await supabase.auth.signUp({
           email,
           password,
@@ -36,13 +36,11 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         if (authError) throw authError;
 
         if (data.user) {
-          // 2. Check if this is the FIRST user. If so, make them ADMIN.
           const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
           const isFirstUser = count === 0;
           const assignedRole = isFirstUser ? 'ADMIN' : 'MEMBER';
 
-          // 3. Create Profile entry
-          const { error: profileError } = await supabase.from('profiles').upsert({
+          await supabase.from('profiles').upsert({
             id: data.user.id,
             email: email,
             name: name,
@@ -50,11 +48,6 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             role: assignedRole
           });
 
-          if (profileError) {
-             console.error("Profile creation failed:", profileError);
-          }
-
-          // If session is null, it means email confirmation is enabled and required
           if (!data.session) {
             setVerificationSent(true);
           } else {
@@ -62,7 +55,6 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           }
         }
       } else {
-        // Login
         const { error: authError } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -73,9 +65,9 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
     } catch (err: any) {
       console.error(err);
       if (err.message && err.message.includes('Could not find the table')) {
-        setError('Database tables are missing. Please go to Supabase -> SQL Editor and run the setup script.');
+        setError('Database error: Tables are missing.');
       } else if (err.message && err.message.includes('Email not confirmed')) {
-         setError('Please check your email to confirm your account before logging in.');
+         setError('Please confirm your email before logging in.');
       } else {
         setError(err.message || 'An error occurred');
       }
@@ -84,60 +76,23 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleResendEmail = async () => {
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email,
-        options: {
-          emailRedirectTo: window.location.origin
-        }
-      });
-      if (error) throw error;
-      alert(`Verification email resent to ${email}`);
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (verificationSent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
         <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-2xl shadow-xl border border-gray-100 text-center">
           <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
             <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-3xl font-extrabold text-gray-900">Check your email</h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <h2 className="text-3xl font-extrabold text-slate-900">Check your email</h2>
+          <p className="mt-2 text-sm text-slate-600">
             We sent a verification link to <strong>{email}</strong>.
           </p>
-          <p className="text-sm text-gray-500">
-            Please click the link in that email to activate your account. Once verified, you can log in below.
-          </p>
-          
           <div className="space-y-3 mt-6">
-            <Button 
-              className="w-full" 
-              onClick={() => {
-                setVerificationSent(false);
-                setMode('login');
-              }}
-            >
+            <Button className="w-full" onClick={() => { setVerificationSent(false); setMode('login'); }}>
               Back to Login
             </Button>
-            
-            <button 
-              onClick={handleResendEmail}
-              className="text-xs text-indigo-600 hover:text-indigo-800 underline"
-              disabled={loading}
-            >
-              Resend Verification Email
-            </button>
           </div>
         </div>
       </div>
@@ -145,74 +100,77 @@ export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-2xl shadow-xl border border-gray-100">
-        <div className="text-center">
-          <h2 className="text-3xl font-extrabold text-gray-900">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full bg-white p-8 md:p-10 rounded-3xl shadow-2xl border border-slate-100">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">
             {mode === 'login' ? 'Welcome Back!' : 'Join the Challenge'}
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm font-medium text-slate-500">
             {mode === 'login' 
               ? 'Sign in to log your habits.' 
               : 'Create an account to start tracking.'}
           </p>
         </div>
 
-        <form className="space-y-6" onSubmit={handleAuth}>
+        <form className="space-y-5" onSubmit={handleAuth}>
           {mode === 'signup' && (
              <div>
-              <label className="block text-sm font-medium text-gray-700">Full Name</label>
+              <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 sm:text-sm bg-white text-gray-900"
+                className="block w-full border border-slate-300 rounded-xl shadow-sm py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-slate-900 outline-none transition-all"
+                placeholder="John Doe"
               />
             </div>
           )}
           
           <div>
-            <label className="block text-sm font-medium text-gray-700">Email Address</label>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 sm:text-sm bg-white text-gray-900"
+              className="block w-full border border-slate-300 rounded-xl shadow-sm py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-slate-900 outline-none transition-all"
+              placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Password</label>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Password</label>
             <input
               type="password"
               required
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 sm:text-sm bg-white text-gray-900"
+              className="block w-full border border-slate-300 rounded-xl shadow-sm py-2.5 px-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-slate-900 outline-none transition-all"
+              placeholder="••••••••"
             />
           </div>
 
           {error && (
-            <div className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">
+            <div className="text-red-600 text-xs font-bold text-center bg-red-50 p-3 rounded-xl border border-red-100">
               {error}
             </div>
           )}
 
-          <Button type="submit" className="w-full" isLoading={loading}>
+          <Button type="submit" className="w-full py-3 rounded-xl text-base font-bold shadow-lg shadow-indigo-200" isLoading={loading}>
             {mode === 'login' ? 'Sign In' : 'Create Account'}
           </Button>
 
-          <div className="text-center">
+          <div className="text-center mt-6">
             <button 
               type="button" 
               onClick={() => {
                 setMode(mode === 'login' ? 'signup' : 'login');
                 setError(null);
               }} 
-              className="text-sm text-indigo-600 hover:text-indigo-500"
+              className="text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
             >
               {mode === 'login' 
                 ? "Don't have an account? Sign up" 
