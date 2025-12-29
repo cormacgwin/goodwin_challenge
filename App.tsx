@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { dataProvider } from './services/dataProvider';
 import { supabase } from './services/supabaseClient';
@@ -12,6 +13,7 @@ import { Profile } from './components/Profile';
 const App: React.FC = () => {
   const [state, setState] = useState<AppState | null>(null);
   const [currentView, setCurrentView] = useState('dashboard');
+  const [targetUserId, setTargetUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Force the browser tab title to update
@@ -34,7 +36,6 @@ const App: React.FC = () => {
     let mounted = true;
 
     const init = async () => {
-      // 1. Check for existing session
       const { data: { session } } = await supabase.auth.getSession();
       
       if (mounted) {
@@ -48,7 +49,6 @@ const App: React.FC = () => {
 
     init();
 
-    // 2. Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN') {
         setLoading(true);
@@ -69,6 +69,16 @@ const App: React.FC = () => {
     await supabase.auth.signOut();
   };
 
+  const handleViewProfile = (userId: string) => {
+    setTargetUserId(userId);
+    setCurrentView('profile');
+  };
+
+  const handleMyProfile = () => {
+    setTargetUserId(state?.currentUser?.id || null);
+    setCurrentView('profile');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -77,16 +87,22 @@ const App: React.FC = () => {
     );
   }
 
-  // If we have state but no current user, show Auth
   if (!state?.currentUser) {
-    return <Auth onLoginSuccess={() => {/* handled by auth listener */}} />;
+    return <Auth onLoginSuccess={() => {}} />;
   }
 
   return (
     <Layout 
       user={state.currentUser} 
       currentView={currentView} 
-      onNavigate={setCurrentView} 
+      onNavigate={(view) => {
+        if (view === 'profile') {
+          handleMyProfile();
+        } else {
+          setCurrentView(view);
+          setTargetUserId(null);
+        }
+      }} 
       onLogout={handleLogout}
     >
       {currentView === 'dashboard' && (
@@ -113,12 +129,17 @@ const App: React.FC = () => {
           users={state.users}
           logs={state.logs}
           habits={state.habits}
+          onViewProfile={handleViewProfile}
         />
       )}
 
       {currentView === 'profile' && (
         <Profile
           user={state.currentUser}
+          targetUser={state.users.find(u => u.id === targetUserId) || state.currentUser}
+          allLogs={state.logs}
+          allHabits={state.habits}
+          settings={state.settings}
           onUpdateAvatar={async (url) => {
             if (!state.currentUser) return;
             const newState = await dataProvider.updateUserAvatar(state.currentUser.id, url);
@@ -132,9 +153,12 @@ const App: React.FC = () => {
           onDeleteAccount={async () => {
             if (!state.currentUser) return;
             await dataProvider.deleteAccount(state.currentUser.id);
-            // State clear handled by auth listener
           }}
           onLogout={handleLogout}
+          onBack={() => {
+            setCurrentView('leaderboard');
+            setTargetUserId(null);
+          }}
         />
       )}
 

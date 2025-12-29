@@ -2,16 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Team, User, Log, Habit } from '../types';
-import { Trophy, CheckCircle2, Circle } from 'lucide-react';
+import { Trophy, CheckCircle2, Circle, ChevronRight } from 'lucide-react';
 
 interface LeaderboardProps {
   teams: Team[];
   users: User[];
   logs: Log[];
   habits: Habit[];
+  onViewProfile?: (userId: string) => void;
 }
 
-export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, habits }) => {
+export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, habits, onViewProfile }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
@@ -20,7 +21,6 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   
-  // Helper to get today's key in YYYY-MM-DD local time
   const getTodayKey = () => {
     const d = new Date();
     const year = d.getFullYear();
@@ -50,7 +50,6 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
     return logs.some(l => l.userId === userId && l.date === todayKey && l.completed);
   };
 
-  // Base data calculation
   const rawData = teams.map(team => ({
     name: team.name,
     score: getTeamScore(team.id),
@@ -60,25 +59,18 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
     memberCount: users.filter(u => u.teamId === team.id).length
   }));
 
-  // Chart Data: Sorted by Admin Order
   const chartData = [...rawData].sort((a, b) => a.order - b.order);
-
-  // Card Data: Sorted by Score (Desc)
   const cardData = [...rawData].sort((a, b) => b.score - a.score);
 
-  // Custom Tick Component to handle wrapping text
   const CustomAxisTick = (props: any) => {
     const { x, y, payload } = props;
     const text = payload.value;
-    
-    // Split logic: Priority to "&", otherwise space
     let lines = [];
     if (text.includes(' & ')) {
         lines = text.split(' & ').map((part: string, i: number, arr: string[]) => 
             i < arr.length - 1 ? `${part} &` : part
         );
     } else {
-        // If name is very long (> 12 chars) and has spaces, split it
         lines = text.length > 12 && text.includes(' ') ? text.split(' ') : [text];
     }
 
@@ -102,26 +94,24 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
           <Trophy className="mr-2 text-yellow-500" /> Team Standings
         </h2>
         
-        {/* Vertical Bars: X Axis = Name, Y Axis = Score */}
-        {/* Added wrapper with strict dimensions to fix Recharts width(-1) error */}
         <div style={{ width: '100%', height: 400, minWidth: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: isMobile ? 0 : 40 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis 
                 dataKey="name" 
                 axisLine={false} 
                 tickLine={false} 
-                interval={0} // Force show all labels
+                interval={0}
                 tick={isMobile ? false : <CustomAxisTick />}
                 height={isMobile ? 10 : 60}
               />
               <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} />
               <Tooltip 
-                cursor={{fill: '#f3f4f6'}}
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                cursor={{fill: '#f8fafc'}}
+                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
               />
-              <Bar dataKey="score" radius={[4, 4, 0, 0]} barSize={50}>
+              <Bar dataKey="score" radius={[8, 8, 0, 0]} barSize={50}>
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
@@ -131,64 +121,69 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {cardData.map((team, idx) => (
-          <div key={team.name} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-             <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-4">
+          <div key={team.name} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+             <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
                  <div className="flex items-center">
-                    <span className={`flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full font-bold mr-3 ${
-                      idx === 0 ? 'bg-yellow-100 text-yellow-700' :
-                      idx === 1 ? 'bg-gray-100 text-gray-700' :
-                      'bg-orange-50 text-orange-800'
+                    <span className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-2xl font-black mr-3 ${
+                      idx === 0 ? 'bg-amber-100 text-amber-600' :
+                      idx === 1 ? 'bg-slate-100 text-slate-500' :
+                      'bg-orange-50 text-orange-400'
                     }`}>
                       {idx + 1}
                     </span>
                     <div>
-                       <h3 className="font-bold text-gray-900 text-lg">{team.name}</h3>
-                       <p className="text-sm text-gray-500">{team.memberCount} Members</p>
+                       <h3 className="font-bold text-gray-900 text-lg leading-none mb-1">{team.name}</h3>
+                       <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{team.memberCount} Members</p>
                     </div>
                  </div>
                  <div className="text-right">
-                   <span className="block text-2xl font-bold text-indigo-600">{team.score}</span>
-                   <span className="text-xs text-gray-400">POINTS</span>
+                   <span className="block text-2xl font-black text-indigo-600 leading-none">{team.score}</span>
+                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">PTS</span>
                  </div>
              </div>
              
-             {/* Team Members List */}
              <div>
-               <div className="flex items-center justify-between mb-2">
-                 <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Team Members</h4>
-                 <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded">Activity Today</span>
+               <div className="flex items-center justify-between mb-4">
+                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Participants</h4>
+                 <span className="text-[9px] font-bold text-gray-400 bg-gray-50 px-2 py-0.5 rounded uppercase">Activity Today</span>
                </div>
                
-               <div className="space-y-2">
+               <div className="space-y-3">
                  {team.members.length > 0 ? team.members.map(member => {
                    const activeToday = hasLoggedToday(member.id);
                    return (
-                     <div key={member.id} className="flex items-center justify-between text-sm text-gray-700 p-2 hover:bg-gray-50 rounded-lg transition-colors">
+                     <button 
+                       key={member.id} 
+                       onClick={() => onViewProfile?.(member.id)}
+                       className="w-full flex items-center justify-between text-sm p-3 hover:bg-indigo-50/50 rounded-2xl transition-all group text-left"
+                     >
                        <div className="flex items-center">
                          {member.avatarUrl ? (
-                            <img src={member.avatarUrl} alt="" className="h-8 w-8 rounded-full mr-3 bg-gray-200 object-cover" />
+                            <img src={member.avatarUrl} alt="" className="h-10 w-10 rounded-full mr-3 bg-gray-100 border-2 border-white shadow-sm object-cover" />
                          ) : (
-                            <div className="h-8 w-8 rounded-full mr-3 bg-gray-200 flex items-center justify-center text-[10px] text-gray-500 font-bold">
+                            <div className="h-10 w-10 rounded-full mr-3 bg-indigo-50 border-2 border-white shadow-sm flex items-center justify-center text-xs text-indigo-300 font-black">
                                 {member.name.charAt(0)}
                             </div>
                          )}
-                         <span className="font-medium">{member.name}</span>
+                         <div>
+                            <span className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{member.name}</span>
+                            <span className="flex items-center text-[10px] text-gray-400 group-hover:text-indigo-400">View profile <ChevronRight size={10} className="ml-0.5" /></span>
+                         </div>
                        </div>
                        
-                       {/* Activity Indicator */}
                        <div title={activeToday ? "Logged points today" : "No points logged today"}>
                           {activeToday ? (
-                            <CheckCircle2 size={20} className="text-green-500 fill-green-50" />
+                            <CheckCircle2 size={24} className="text-green-500 fill-green-50" />
                           ) : (
-                            <Circle size={20} className="text-gray-200 fill-gray-50" />
+                            <Circle size={24} className="text-gray-100 fill-gray-50" />
                           )}
                        </div>
-                     </div>
+                     </button>
                    );
                  }) : (
-                   <p className="text-xs text-gray-400 italic">No members assigned yet.</p>
+                   <p className="text-xs text-gray-400 italic py-2">No members assigned yet.</p>
                  )}
                </div>
              </div>
