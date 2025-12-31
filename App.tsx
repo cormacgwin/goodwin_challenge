@@ -187,6 +187,10 @@ const App: React.FC = () => {
             const newState = await dataProvider.addHabit(h);
             setState(newState);
           }}
+          onRemoveHabit={async (id) => {
+            const newState = await dataProvider.removeHabit(id);
+            setState(newState);
+          }}
           onUpdateUserTeam={async (uid, tid) => {
             const newState = await dataProvider.updateUserTeam(uid, tid);
             setState(newState);
