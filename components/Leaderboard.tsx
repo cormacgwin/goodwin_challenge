@@ -106,9 +106,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
               data={chartData} 
               margin={{ 
                 top: 10, 
-                right: isMobile ? 5 : 20, 
-                left: isMobile ? -25 : 0, 
-                bottom: isMobile ? 0 : 20 
+                right: isMobile ? 10 : 20, 
+                left: isMobile ? -30 : 0, 
+                bottom: isMobile ? -20 : 20 
               }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -117,8 +117,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
                 axisLine={false} 
                 tickLine={false} 
                 interval={0} 
-                height={isMobile ? 30 : 50} 
-                tick={{fill: '#9ca3af', fontSize: isMobile ? 10 : 12, fontWeight: 600}} 
+                height={isMobile ? 0 : 50} 
+                tick={isMobile ? false : {fill: '#9ca3af', fontSize: 12, fontWeight: 600}} 
               />
               <YAxis 
                 axisLine={false} 
@@ -126,7 +126,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
                 tick={{fill: '#9ca3af', fontSize: 10}} 
               />
               <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-              <Bar dataKey="score" radius={[8, 8, 0, 0]} barSize={isMobile ? 30 : 50}>
+              <Bar dataKey="score" radius={[8, 8, 0, 0]} barSize={isMobile ? 35 : 50}>
                 {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
               </Bar>
             </BarChart>

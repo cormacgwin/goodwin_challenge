@@ -1,13 +1,14 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { User, Habit } from '../types';
 import { Button } from './Button';
-import { LogOut, Trash2, CheckCircle2, Circle, AlertCircle, Save, UserCircle } from 'lucide-react';
+import { LogOut, Trash2, CheckCircle2, Circle, AlertCircle, Save, UserCircle, Camera } from 'lucide-react';
 
 interface SettingsPageProps {
   user: User;
   allHabits: Habit[];
   onUpdateName: (name: string) => void;
+  onUpdateAvatar: (url: string) => void;
   onUpdateHabits: (habitIds: string[]) => void;
   onDeleteAccount: () => void;
   onLogout: () => void;
@@ -16,7 +17,8 @@ interface SettingsPageProps {
 export const SettingsPage: React.FC<SettingsPageProps> = ({ 
   user, 
   allHabits, 
-  onUpdateName, 
+  onUpdateName,
+  onUpdateAvatar,
   onUpdateHabits, 
   onDeleteAccount, 
   onLogout 
@@ -25,6 +27,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [selectedHabits, setSelectedHabits] = useState<string[]>(user.habitIds || []);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleHabitSelection = (habitId: string) => {
     if (selectedHabits.includes(habitId)) {
@@ -40,6 +43,29 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const MAX_SIZE = 300;
+          let width = img.width, height = img.height;
+          if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } } 
+          else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
+          canvas.width = width; canvas.height = height;
+          ctx?.drawImage(img, 0, 0, width, height);
+          onUpdateAvatar(canvas.toDataURL('image/jpeg', 0.7));
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-12 animate-in fade-in duration-300">
       <div className="flex items-center space-x-3 mb-2">
@@ -49,6 +75,45 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         <div>
            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Settings</h1>
            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Habit Selection & Profile</p>
+        </div>
+      </div>
+
+      {/* Account Profile Management */}
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col items-center text-center">
+        <div className="relative inline-block mb-4">
+          {user.avatarUrl ? (
+            <img src={user.avatarUrl} alt="" className="h-24 w-24 rounded-full bg-gray-50 border-4 border-white shadow-xl object-cover" />
+          ) : (
+            <div className="h-24 w-24 rounded-full bg-indigo-50 border-4 border-white shadow-xl flex items-center justify-center text-2xl text-indigo-300 font-black">
+              {user.name.charAt(0)}
+            </div>
+          )}
+          <button 
+            onClick={() => fileInputRef.current?.click()} 
+            className="absolute bottom-0 right-0 bg-indigo-600 p-2 rounded-xl shadow-lg border-2 border-white text-white hover:scale-110 transition-transform"
+          >
+            <Camera size={14} />
+          </button>
+          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+        </div>
+        <div className="w-full max-w-sm">
+           <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Display Name</label>
+           <div className="flex space-x-2">
+             <input 
+               type="text" 
+               value={name} 
+               onChange={(e) => { setName(e.target.value); setIsEditingName(true); }} 
+               className="block flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm font-medium bg-gray-50 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
+             />
+             <Button 
+               onClick={() => { onUpdateName(name); setIsEditingName(false); }} 
+               className="px-4 py-2 rounded-xl" 
+               disabled={!isEditingName}
+               size="sm"
+             >
+               Save
+             </Button>
+           </div>
         </div>
       </div>
 
@@ -103,27 +168,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         >
           Confirm My Habit Selection
         </Button>
-      </div>
-
-      {/* Profile Details Edit */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-6 flex items-center">
-           <Save size={16} className="mr-2 text-indigo-600" /> Account Information
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-          <div>
-             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Display Name</label>
-             <input 
-               type="text" 
-               value={name} 
-               onChange={(e) => { setName(e.target.value); setIsEditingName(true); }} 
-               className="block w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium bg-gray-50 focus:bg-white outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
-             />
-          </div>
-          <div>
-             <Button onClick={() => { onUpdateName(name); setIsEditingName(false); }} className="w-full py-3 rounded-xl" disabled={!isEditingName}>Update Profile Name</Button>
-          </div>
-        </div>
       </div>
 
       {/* Logout and Delete */}

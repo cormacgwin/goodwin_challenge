@@ -154,6 +154,11 @@ const App: React.FC = () => {
             const newState = await dataProvider.updateUserName(state.currentUser.id, name);
             setState(newState);
           }}
+          onUpdateAvatar={async (url) => {
+            if (!state.currentUser) return;
+            const newState = await dataProvider.updateUserAvatar(state.currentUser.id, url);
+            setState(newState);
+          }}
           onUpdateHabits={async (hids) => {
             if (!state.currentUser) return;
             const newState = await dataProvider.updateUserHabits(state.currentUser.id, hids);
@@ -180,10 +185,6 @@ const App: React.FC = () => {
           }}
           onAddHabit={async (h) => {
             const newState = await dataProvider.addHabit(h);
-            setState(newState);
-          }}
-          onRemoveHabit={async (id) => {
-            const newState = await dataProvider.removeHabit(id);
             setState(newState);
           }}
           onUpdateUserTeam={async (uid, tid) => {
