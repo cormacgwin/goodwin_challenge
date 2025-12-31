@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { ChallengeSettings, Habit, User, Team } from '../types';
 import { Button } from './Button';
-import { Trash2, Plus, Share2, Copy, Check, Mail, ArrowUp, ArrowDown } from 'lucide-react';
+import { Trash2, Plus, Share2, Copy, Check, Mail, ArrowUp, ArrowDown, Banknote } from 'lucide-react';
 
 interface AdminPanelProps {
   settings: ChallengeSettings;
@@ -63,7 +63,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleAddTeam = (e: React.FormEvent) => {
     e.preventDefault();
     if (newTeamName) {
-      // Default order is last
       const maxOrder = teams.length > 0 ? Math.max(...teams.map(t => t.order)) : 0;
       onAddTeam({
         id: `t_${Date.now()}`,
@@ -84,7 +83,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     const teamA = teams[index];
     const teamB = teams[otherIndex];
 
-    // Swap orders
     const orderA = teamA.order;
     const orderB = teamB.order;
 
@@ -159,7 +157,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-gray-900"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 border-b border-gray-100 pb-6">
                <div>
                   <label className="block text-sm font-medium text-gray-700">Start Date</label>
                   <input 
@@ -178,6 +176,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 bg-white text-gray-900"
                   />
                </div>
+            </div>
+
+            {/* FINANCIAL SETTINGS */}
+            <div className="pt-2">
+              <label className="block text-sm font-bold text-gray-900 mb-1 flex items-center">
+                <Banknote size={16} className="mr-2 text-green-600" /> Financial Stake
+              </label>
+              <p className="text-xs text-gray-500 mb-3">The total amount each user agrees to pay the winner if they complete 0% of the challenge.</p>
+              <div className="relative mt-1 rounded-md shadow-sm max-w-xs">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                  <span className="text-gray-500 sm:text-sm">$</span>
+                </div>
+                <input
+                  type="number"
+                  value={settings.stakeAmount}
+                  onChange={e => onUpdateSettings({...settings, stakeAmount: Number(e.target.value)})}
+                  className="block w-full rounded-md border-gray-300 pl-7 pr-12 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 bg-white text-gray-900"
+                  placeholder="200"
+                />
+              </div>
             </div>
             
             {/* INVITE SECTION */}
@@ -203,12 +221,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                   {/* Native Share (Mobile) */}
                    <Button variant="primary" size="sm" onClick={shareNative} className="w-full flex items-center justify-center">
                       <Share2 size={14} className="mr-2" /> Share App
                    </Button>
-                   
-                   {/* Email */}
                    <Button variant="secondary" size="sm" onClick={emailInvite} className="w-full flex items-center justify-center">
                       <Mail size={14} className="mr-2" /> Email Invite
                    </Button>
@@ -258,7 +273,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         {activeTab === 'teams' && (
           <div className="space-y-8">
-            {/* MANAGE TEAMS SECTION */}
             <div>
               <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">Manage Teams</h3>
               <div className="space-y-3 mb-6">
@@ -311,7 +325,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 ))}
               </div>
 
-              {/* Add New Team Form */}
               <form onSubmit={handleAddTeam} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                  <h4 className="text-xs font-bold text-gray-700 mb-3">Create New Team</h4>
                  <div className="flex space-x-3">
@@ -338,7 +351,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </form>
             </div>
 
-            {/* USER ASSIGNMENT SECTION */}
             <div className="border-t border-gray-100 pt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">User Assignments</h3>
               <div className="overflow-x-auto">

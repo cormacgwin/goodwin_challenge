@@ -11,6 +11,7 @@ export interface User {
   role: Role;
   teamId?: string;
   avatarUrl?: string;
+  habitIds?: string[]; // IDs of the 5 habits selected for the challenge
 }
 
 export interface Team {
@@ -43,6 +44,7 @@ export interface ChallengeSettings {
   endDate: string;
   isActive: boolean;
   rules: string;
+  stakeAmount: number;
 }
 
 export interface AppState {

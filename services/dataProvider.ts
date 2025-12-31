@@ -2,6 +2,8 @@
 import { supabase } from './supabaseClient';
 import { AppState, User, Habit, Team, Log, ChallengeSettings, Role } from '../types';
 
+const HABIT_SEP = ":::";
+
 export const dataProvider = {
   // --- FETCH ALL DATA ---
   async getInitialState(): Promise<AppState> {
@@ -9,7 +11,7 @@ export const dataProvider = {
       { data: habits },
       { data: teamsData },
       { data: logsData },
-      { data: settings },
+      { data: settingsData },
       { data: profilesData }
     ] = await Promise.all([
       supabase.from('habits').select('*'),
@@ -28,14 +30,31 @@ export const dataProvider = {
       completed: l.completed
     }));
 
-    const users: User[] = (profilesData || []).map((p: any) => ({
-      id: p.id,
-      email: p.email,
-      name: p.name,
-      role: p.role as Role,
-      teamId: p.team_id,
-      avatarUrl: p.avatar_url
-    }));
+    const users: User[] = (profilesData || []).map((p: any) => {
+      // Decode habit selection from name if present
+      let displayName = p.name || '';
+      let habitIds: string[] = [];
+      
+      if (displayName.includes(HABIT_SEP)) {
+        const parts = displayName.split(HABIT_SEP);
+        displayName = parts[0].trim();
+        try {
+          habitIds = JSON.parse(parts[1]);
+        } catch (e) {
+          console.error("Failed to parse habit IDs for user", p.id);
+        }
+      }
+
+      return {
+        id: p.id,
+        email: p.email,
+        name: displayName,
+        role: p.role as Role,
+        teamId: p.team_id,
+        avatarUrl: p.avatar_url,
+        habitIds: habitIds
+      };
+    });
 
     const teams: Team[] = (teamsData || []).map((t: any) => ({
       id: t.id,
@@ -45,7 +64,6 @@ export const dataProvider = {
       order: t.order_index ?? 0
     }));
 
-    // Get current user session
     const { data: { session } } = await supabase.auth.getSession();
     let currentUser: User | null = null;
     
@@ -53,63 +71,85 @@ export const dataProvider = {
       currentUser = users.find(u => u.id === session.user.id) || null;
     }
 
+    let rules = settingsData?.rules || '1. Log your habits daily.\n2. Be honest!';
+    let stakeAmount = 200;
+
+    const stakeMatch = rules.match(/^\[STAKE:(\d+)\]/);
+    if (stakeMatch) {
+      stakeAmount = parseInt(stakeMatch[1], 10);
+      rules = rules.replace(/^\[STAKE:\d+\]\s*/, '');
+    }
+
+    const settings: ChallengeSettings = settingsData ? {
+      name: settingsData.name,
+      startDate: settingsData.start_date,
+      endDate: settingsData.end_date,
+      isActive: settingsData.is_active,
+      rules: rules,
+      stakeAmount: stakeAmount
+    } : {
+      name: 'The Challenge',
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      isActive: true,
+      rules: rules,
+      stakeAmount: 200
+    };
+
     return {
       currentUser,
       users,
       teams,
       habits: habits || [],
       logs,
-      settings: settings ? {
-        name: settings.name,
-        startDate: settings.start_date,
-        endDate: settings.end_date,
-        isActive: settings.is_active,
-        rules: settings.rules || '1. Log your habits daily.\n2. Be honest!'
-      } : {
-        name: 'New Challenge',
-        startDate: new Date().toISOString(),
-        endDate: new Date().toISOString(),
-        isActive: true,
-        rules: '1. Log your habits daily.\n2. Be honest!'
-      }
+      settings
     };
   },
 
-  // --- ACTIONS ---
+  async updateUserHabits(userId: string, habitIds: string[]) {
+    // To ensure persistence without schema changes, we fetch the current display name 
+    // and store the JSON-stringified IDs as a hidden suffix.
+    const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).single();
+    let pureName = (profile?.name || '').split(HABIT_SEP)[0].trim();
+    const encodedName = `${pureName}${HABIT_SEP}${JSON.stringify(habitIds)}`;
+
+    const { error } = await supabase.from('profiles').update({ 
+      name: encodedName
+    }).eq('id', userId);
+    
+    if (error) {
+      console.error('Error saving user habits:', error.message);
+    }
+    return this.getInitialState();
+  },
 
   async addHabit(habit: Habit) {
     const { error } = await supabase.from('habits').insert(habit);
-    if (error) console.error('Error adding habit:', error);
+    if (error) console.error('Error adding habit:', error.message);
     return this.getInitialState();
   },
 
   async removeHabit(id: string) {
-    // 1. Delete associated logs first (Fixes Foreign Key Error)
     const { error: logError } = await supabase.from('logs').delete().eq('habit_id', id);
-    if (logError) console.error('Error removing associated logs:', logError);
-    
-    // 2. Delete the habit
+    if (logError) console.error('Error removing associated logs:', logError.message);
     const { error } = await supabase.from('habits').delete().eq('id', id);
-    if (error) console.error('Error removing habit:', error);
-    
+    if (error) console.error('Error removing habit:', error.message);
     return this.getInitialState();
   },
 
   async updateSettings(settings: ChallengeSettings) {
-    // We assume ID 1 for settings based on our SQL script
-    const { error } = await supabase.from('settings').update({
+    const rulesWithStake = `[STAKE:${settings.stakeAmount}] ${settings.rules}`;
+    const { error } = await supabase.from('settings').upsert({
+       id: 1, 
        name: settings.name,
        start_date: settings.startDate,
        end_date: settings.endDate,
        is_active: settings.isActive,
-       rules: settings.rules
-    }).eq('id', 1);
-    
-    if (error) console.error('Error updating settings:', error);
+       rules: rulesWithStake
+    });
+    if (error) console.error('Error updating settings:', error.message);
     return this.getInitialState();
   },
-
-  // --- TEAM MANAGEMENT ---
 
   async addTeam(team: Team) {
     const { error } = await supabase.from('teams').insert({
@@ -118,16 +158,14 @@ export const dataProvider = {
       color: team.color,
       order_index: team.order
     });
-    if (error) console.error('Error adding team:', error);
+    if (error) console.error('Error adding team:', error.message);
     return this.getInitialState();
   },
 
   async removeTeam(teamId: string) {
-    // Unassign users first to avoid FK errors
     await supabase.from('profiles').update({ team_id: null }).eq('team_id', teamId);
-    
     const { error } = await supabase.from('teams').delete().eq('id', teamId);
-    if (error) console.error('Error removing team:', error);
+    if (error) console.error('Error removing team:', error.message);
     return this.getInitialState();
   },
 
@@ -137,44 +175,45 @@ export const dataProvider = {
       color: team.color,
       order_index: team.order
     }).eq('id', team.id);
-    if (error) console.error('Error updating team:', error);
+    if (error) console.error('Error updating team:', error.message);
     return this.getInitialState();
   },
 
   async updateUserTeam(userId: string, teamId: string) {
     const { error } = await supabase.from('profiles').update({ team_id: teamId }).eq('id', userId);
-    if (error) console.error('Error updating user team:', error);
+    if (error) console.error('Error updating user team:', error.message);
     return this.getInitialState();
   },
 
   async updateUserAvatar(userId: string, avatarUrl: string) {
     const { error } = await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', userId);
-    if (error) console.error('Error updating avatar:', error);
+    if (error) console.error('Error updating avatar:', error.message);
     return this.getInitialState();
   },
 
-  async updateUserName(userId: string, name: string) {
-    const { error } = await supabase.from('profiles').update({ name: name }).eq('id', userId);
-    if (error) console.error('Error updating name:', error);
+  async updateUserName(userId: string, newPureName: string) {
+    // Preserve existing habit encoding when updating name
+    const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).single();
+    const habitData = (profile?.name || '').split(HABIT_SEP)[1];
+    const encodedName = habitData ? `${newPureName.trim()}${HABIT_SEP}${habitData}` : newPureName.trim();
+
+    const { error } = await supabase.from('profiles').update({ name: encodedName }).eq('id', userId);
+    if (error) console.error('Error updating name:', error.message);
     return this.getInitialState();
   },
 
   async deleteAccount(userId: string) {
     const { error } = await supabase.from('profiles').delete().eq('id', userId);
-    if (error) console.error('Error deleting account:', error);
+    if (error) console.error('Error deleting account:', error.message);
     await supabase.auth.signOut();
     return null;
   },
 
   async toggleLog(userId: string, habitId: string, date: string, currentLogs: Log[]) {
-    // Check if log exists
     const existing = currentLogs.find(l => l.userId === userId && l.habitId === habitId && l.date === date);
-
     if (existing) {
-      // Delete
       await supabase.from('logs').delete().eq('id', existing.id);
     } else {
-      // Create
       await supabase.from('logs').insert({
         id: `${userId}-${habitId}-${date}`, 
         user_id: userId,
@@ -183,7 +222,6 @@ export const dataProvider = {
         completed: true
       });
     }
-    
     return this.getInitialState();
   }
 };

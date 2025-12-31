@@ -9,6 +9,7 @@ import { HabitTracker } from './components/HabitTracker';
 import { Leaderboard } from './components/Leaderboard';
 import { AdminPanel } from './components/AdminPanel';
 import { Profile } from './components/Profile';
+import { SettingsPage } from './components/SettingsPage';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState | null>(null);
@@ -16,7 +17,6 @@ const App: React.FC = () => {
   const [targetUserId, setTargetUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Force the browser tab title to update
   useEffect(() => {
     document.title = "The Challenge";
   }, []);
@@ -34,19 +34,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (mounted) {
-        if (session) {
-           await fetchData();
-        } else {
-           setLoading(false);
-        }
+        if (session) await fetchData();
+        else setLoading(false);
       }
     };
-
     init();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -106,21 +100,19 @@ const App: React.FC = () => {
       onLogout={handleLogout}
     >
       {currentView === 'dashboard' && (
-        <div className="space-y-6">
-          <HabitTracker 
-            user={state.currentUser}
-            habits={state.habits}
-            logs={state.logs}
-            userTeam={state.teams.find(t => t.id === state.currentUser?.teamId)}
-            settings={state.settings}
-            onToggleHabit={async (habitId, date) => {
-              if (!state.currentUser) return;
-              const newState = await dataProvider.toggleLog(state.currentUser.id, habitId, date, state.logs);
-              setState(newState);
-            }}
-            onNavigate={setCurrentView}
-          />
-        </div>
+        <HabitTracker 
+          user={state.currentUser}
+          habits={state.habits}
+          logs={state.logs}
+          userTeam={state.teams.find(t => t.id === state.currentUser?.teamId)}
+          settings={state.settings}
+          onToggleHabit={async (habitId, date) => {
+            if (!state.currentUser) return;
+            const newState = await dataProvider.toggleLog(state.currentUser.id, habitId, date, state.logs);
+            setState(newState);
+          }}
+          onNavigate={setCurrentView}
+        />
       )}
 
       {currentView === 'leaderboard' && (
@@ -129,6 +121,7 @@ const App: React.FC = () => {
           users={state.users}
           logs={state.logs}
           habits={state.habits}
+          settings={state.settings}
           onViewProfile={handleViewProfile}
         />
       )}
@@ -145,20 +138,33 @@ const App: React.FC = () => {
             const newState = await dataProvider.updateUserAvatar(state.currentUser.id, url);
             setState(newState);
           }}
+          onBack={() => {
+            setCurrentView('leaderboard');
+            setTargetUserId(null);
+          }}
+        />
+      )}
+
+      {currentView === 'settings' && (
+        <SettingsPage
+          user={state.currentUser}
+          allHabits={state.habits}
           onUpdateName={async (name) => {
             if (!state.currentUser) return;
             const newState = await dataProvider.updateUserName(state.currentUser.id, name);
             setState(newState);
+          }}
+          onUpdateHabits={async (hids) => {
+            if (!state.currentUser) return;
+            const newState = await dataProvider.updateUserHabits(state.currentUser.id, hids);
+            setState(newState);
+            setCurrentView('dashboard');
           }}
           onDeleteAccount={async () => {
             if (!state.currentUser) return;
             await dataProvider.deleteAccount(state.currentUser.id);
           }}
           onLogout={handleLogout}
-          onBack={() => {
-            setCurrentView('leaderboard');
-            setTargetUserId(null);
-          }}
         />
       )}
 
