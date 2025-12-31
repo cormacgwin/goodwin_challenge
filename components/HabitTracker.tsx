@@ -314,7 +314,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                  <p className="text-base font-black text-gray-900 leading-none mt-1">-${finance.costOfToday.toFixed(2)}</p>
               </div>
            </div>
-           <button onClick={() => onNavigate('profile')} className="text-[10px] font-black text-indigo-600 bg-white border border-indigo-100 px-3 py-1 rounded-xl shadow-sm hover:bg-indigo-50 transition-all uppercase tracking-widest flex items-center">
+           <button onClick={() => onNavigate('settings')} className="text-[10px] font-black text-indigo-600 bg-white border border-indigo-100 px-3 py-1 rounded-xl shadow-sm hover:bg-indigo-50 transition-all uppercase tracking-widest flex items-center">
               <Settings size={12} className="mr-1" /> Habits
            </button>
         </div>
@@ -394,7 +394,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                 <p className="text-sm text-gray-500 max-w-xs mt-1">You haven't selected your habits for this challenge yet. Go to your settings to pick them!</p>
              </div>
              <button 
-               onClick={() => onNavigate('profile')} 
+               onClick={() => onNavigate('settings')} 
                className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-lg shadow-indigo-200 hover:scale-105 active:scale-95 transition-all"
              >
                 Go to Settings

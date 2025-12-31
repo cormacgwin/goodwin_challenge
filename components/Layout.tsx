@@ -98,7 +98,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, o
             className={`flex flex-col items-center p-2 rounded-2xl transition-all ${currentView === 'dashboard' ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400'}`}
           >
             <LayoutDashboard size={24} />
-            <span className="text-[10px] font-bold mt-1 uppercase">Stats</span>
+            <span className="text-[10px] font-bold mt-1 uppercase">Dash</span>
           </button>
           <button 
             onClick={() => onNavigate('leaderboard')} 
