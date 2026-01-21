@@ -66,12 +66,11 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     return new Date(y, m - 1, d);
   };
 
-  // Only show habits the user has explicitly selected
   const userHabits = useMemo(() => {
     if (user.habitIds && user.habitIds.length > 0) {
       return habits.filter(h => user.habitIds?.includes(h.id));
     }
-    return []; // Enforce selection: show nothing if not selected
+    return [];
   }, [habits, user.habitIds]);
 
   const finance = useMemo(() => {
@@ -79,7 +78,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const end = parseLocalDate(settings.endDate);
     const durationDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
     
-    // Financial calculations based on the user's selected set
     const activeHabitSet = userHabits.length > 0 ? userHabits : habits;
     const dailyPossiblePoints = activeHabitSet.reduce((acc, h) => acc + h.points, 0);
     const totalPossiblePoints = dailyPossiblePoints * durationDays;
@@ -101,7 +99,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     }, 0);
     const costOfToday = (todayPointsPossible - todayPointsEarned) * valuePerPoint;
 
-    // Calculate "Lost So Far" - Guaranteed loss from missed habits in the past
     let lostSoFar = 0;
     let missedHabitsCount = 0;
     const today = new Date();
@@ -129,17 +126,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     const startTime = startDate.getTime();
     const endTime = endDate.getTime();
     const isFuture = nowTime < startTime;
-    const isFinished = nowTime > endTime;
-
-    let countdownString = "";
-    if (isFuture) {
-      const diff = startTime - nowTime;
-      const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const s = Math.floor((diff % (1000 * 60)) / 1000);
-      countdownString = `${d}d ${h}h ${m}m ${s}s`;
-    }
     const msPerDay = 1000 * 60 * 60 * 24;
     const daysLeft = Math.ceil((endTime - nowTime) / msPerDay);
     const totalDuration = endTime - startTime;
@@ -149,7 +135,18 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       percent = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
     }
     const currentDayNum = Math.floor((nowTime - startTime) / msPerDay) + 1;
-    return { isFuture, countdownString, percent, daysLeft: Math.max(0, daysLeft), currentDayNum, isFinished };
+    
+    let countdownString = "";
+    if (isFuture) {
+      const diff = startTime - nowTime;
+      const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const s = Math.floor((diff % (1000 * 60)) / 1000);
+      countdownString = `${d}d ${h}h ${m}m ${s}s`;
+    }
+
+    return { isFuture, countdownString, percent, daysLeft: Math.max(0, daysLeft), currentDayNum };
   };
 
   const { isFuture, countdownString, percent, daysLeft, currentDayNum } = getChallengeStatus();
@@ -175,7 +172,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       );
     };
 
-    // Check if today is already perfect
     if (isPerfectDay(checkDate)) {
       streak = 1;
       checkDate.setDate(checkDate.getDate() - 1);
@@ -186,7 +182,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         } else break;
       }
     } else {
-      // If today isn't perfect, check if yesterday was to preserve the streak
       checkDate.setDate(checkDate.getDate() - 1);
       while (true) {
         if (isPerfectDay(checkDate)) {
@@ -277,7 +272,7 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       )}
 
       {/* 1. CHALLENGE PROGRESS */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-3xl shadow-lg p-6 text-white relative overflow-hidden">
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-[2.5rem] shadow-lg p-6 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-10 -mt-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-end justify-between">
           <div>
@@ -318,32 +313,30 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         )}
       </div>
 
-      {/* 2. FINANCIAL WIDGET */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="bg-green-600 p-6 text-white relative overflow-hidden">
-           <div className="absolute top-0 right-0 -mr-6 -mt-6 w-24 h-24 bg-white opacity-10 rounded-full blur-xl"></div>
-           <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end justify-between">
-              <div>
-                 <h2 className="text-[10px] font-black uppercase tracking-widest text-green-100 flex items-center mb-2">
-                    <Banknote size={14} className="mr-2" /> Financial Payout
-                 </h2>
-                 <p className="text-xs text-green-100 opacity-90 leading-relaxed mb-1">Current debt to winner:</p>
-                 <p className="text-5xl font-black text-white tracking-tighter">
-                    ${finance.currentDebt.toFixed(2)}
-                 </p>
-              </div>
-              <div className="mt-4 md:mt-0 flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-4">
-                 <div className="bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-sm border border-white/10 text-right">
-                    <p className="text-[10px] font-black uppercase text-green-100 mb-0.5">Saved So Far</p>
-                    <p className="text-xl font-black text-white">+${finance.savedSoFar.toFixed(2)}</p>
+      {/* 2. FINANCIAL WIDGET - Enhanced layout for mobile & desktop */}
+      <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-green-600 p-8 text-white relative overflow-hidden">
+           <div className="absolute top-0 right-0 -mr-12 -mt-12 w-48 h-48 bg-white opacity-10 rounded-full blur-3xl"></div>
+           <div className="relative z-10">
+              <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-green-100 flex items-center mb-4">
+                 <Banknote size={16} className="mr-2" /> FINANCIAL PAYOUT
+              </h2>
+              
+              <p className="text-6xl font-black text-white tracking-tighter mb-8">
+                 ${finance.currentDebt.toFixed(2)}
+              </p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                 <div className="bg-white/10 p-5 rounded-[2rem] backdrop-blur-md border border-white/10">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-green-100 mb-1">SAVED SO FAR</p>
+                    <p className="text-2xl font-black text-white">+${finance.savedSoFar.toFixed(2)}</p>
                  </div>
-                 <div className="bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-sm border border-white/10 text-right">
-                    <div className="flex items-center justify-end mb-0.5">
-                      <TrendingDown size={10} className="mr-1 text-red-300" />
-                      <p className="text-[10px] font-black uppercase text-red-100">Lost So Far</p>
-                    </div>
-                    <p className="text-xl font-black text-white">-${finance.lostSoFar.toFixed(2)}</p>
-                    <p className="text-[8px] font-black uppercase text-red-100/70">{finance.missedHabitsCount} habits missed</p>
+                 
+                 <div className="bg-white/10 p-5 rounded-[2rem] backdrop-blur-md border border-white/10 relative">
+                    <TrendingDown size={14} className="absolute top-5 right-5 text-red-200/50" />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-red-100 mb-1">LOST SO FAR</p>
+                    <p className="text-2xl font-black text-white">-${finance.lostSoFar.toFixed(2)}</p>
+                    <p className="text-[8px] font-black uppercase text-red-100/60 mt-1">{finance.missedHabitsCount} habits missed</p>
                  </div>
               </div>
            </div>
@@ -365,13 +358,13 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       </div>
 
       {/* 3. HABITS LIST */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[300px] flex flex-col">
+      <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden min-h-[300px] flex flex-col">
         {userHabits.length > 0 ? (
           <>
-            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+            <div className="p-8 border-b border-gray-100 bg-gray-50/50">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-black text-gray-900 tracking-tight">Daily {userHabits.length} Habits</h2>
+                  <h2 className="text-xl font-black text-gray-900 tracking-tight">Daily {userHabits.length} Habits</h2>
                   <p className="text-xs text-gray-500 font-medium">{currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
                 </div>
                 <div className="text-[10px] font-black text-indigo-600 bg-white px-3 py-1.5 rounded-xl border border-indigo-100 uppercase tracking-widest">
@@ -386,20 +379,20 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                 const isDescriptionOpen = activeDescriptionId === habit.id;
                 
                 return (
-                  <div key={habit.id} className={`p-4 transition-all duration-300 ${isCompleted ? 'bg-gray-50/50 opacity-75' : 'hover:bg-gray-50'}`}>
+                  <div key={habit.id} className={`p-6 transition-all duration-300 ${isCompleted ? 'bg-gray-50/50 opacity-75' : 'hover:bg-gray-50'}`}>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4 flex-1 min-w-0">
+                      <div className="flex items-center space-x-5 flex-1 min-w-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleToggle(habit.id); }}
-                          className={`flex-shrink-0 h-10 w-10 rounded-2xl border-2 flex items-center justify-center transition-all transform active:scale-90 ${
+                          className={`flex-shrink-0 h-12 w-12 rounded-2xl border-2 flex items-center justify-center transition-all transform active:scale-90 ${
                             isCompleted ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'border-gray-200 text-transparent hover:border-indigo-400 hover:text-indigo-200'
                           }`}
                         >
-                          <Check size={20} strokeWidth={4} />
+                          <Check size={24} strokeWidth={4} />
                         </button>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center space-x-2">
-                            <h3 className={`font-bold text-gray-900 truncate transition-all ${isCompleted ? 'line-through text-gray-400' : ''}`}>
+                            <h3 className={`font-bold text-gray-900 text-lg truncate transition-all ${isCompleted ? 'line-through text-gray-400' : ''}`}>
                               {habit.name}
                             </h3>
                             <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${isCompleted ? 'bg-gray-100 text-gray-300 border-gray-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
@@ -418,11 +411,6 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                         +{habit.points}
                       </div>
                     </div>
-                    {isDescriptionOpen && (
-                      <div className="mt-3 p-3 bg-indigo-50 rounded-2xl border border-indigo-100 animate-in fade-in slide-in-from-top-2 duration-200">
-                        <p className="text-xs text-indigo-800 font-medium leading-relaxed">{habit.description}</p>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -447,10 +435,10 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
         )}
       </div>
 
-      {/* 4. CALENDAR WIDGET - RESTORED */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 overflow-hidden">
-          <div className="flex items-center justify-between mb-6">
-             <h2 className="text-lg font-black tracking-tight text-gray-900">
+      {/* 4. CALENDAR WIDGET */}
+      <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-8 overflow-hidden">
+          <div className="flex items-center justify-between mb-8">
+             <h2 className="text-xl font-black tracking-tight text-gray-900">
                {viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
              </h2>
              <div className="flex space-x-2">
@@ -480,12 +468,12 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                
                return (
                  <div key={idx} className="flex flex-col items-center justify-center relative">
-                    <button onClick={(e) => { e.stopPropagation(); setCurrentDate(date); }} className="relative w-10 h-10 flex items-center justify-center group focus:outline-none">
+                    <button onClick={(e) => { e.stopPropagation(); setCurrentDate(date); }} className="relative w-12 h-12 flex items-center justify-center group focus:outline-none">
                        <svg className="absolute inset-0 w-full h-full -rotate-90 transform" viewBox="0 0 40 40">
                           <circle cx="20" cy="20" r={radius} stroke="#f3f4f6" strokeWidth="3" fill="none" />
                           <circle cx="20" cy="20" r={radius} stroke={percentComplete > 0 ? "#4f46e5" : "transparent"} strokeWidth="3" fill="none" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" className="transition-all duration-500 ease-out" />
                        </svg>
-                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-all duration-200 ${isSelected ? 'bg-indigo-600 text-white shadow-md scale-110' : 'text-gray-600 hover:bg-gray-100'}`}>
+                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold z-10 transition-all duration-200 ${isSelected ? 'bg-indigo-600 text-white shadow-md scale-110' : 'text-gray-600 hover:bg-gray-100'}`}>
                           {date.getDate()}
                        </div>
                     </button>
@@ -495,9 +483,9 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
           </div>
       </div>
 
-      {/* 5. RECENT ACTIVITY CHART */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-6">
+      {/* 5. RECENT ACTIVITY */}
+      <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-8">
+        <div className="flex items-center justify-between mb-8">
            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center"><BarChartIcon size={16} className="mr-2 text-indigo-600" /> Recent Activity</h3>
            <p className="text-[10px] font-bold text-gray-400 uppercase">Points Tracker</p>
         </div>
@@ -515,23 +503,23 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
       </div>
 
       {/* 6. STATS CARDS */}
-      <div className="grid grid-cols-2 gap-4 pb-4">
-           <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
-               <div className="h-12 w-12 rounded-2xl bg-orange-100 flex items-center justify-center text-orange-600">
-                 <Trophy size={22} />
+      <div className="grid grid-cols-2 gap-6 pb-4">
+           <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex items-center space-x-4">
+               <div className="h-14 w-14 rounded-3xl bg-orange-100 flex items-center justify-center text-orange-600">
+                 <Trophy size={24} />
                </div>
                <div>
                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Today</p>
-                 <p className="text-2xl font-black text-gray-900 leading-none mt-1">{calculateDailyPoints(dateKey)}</p>
+                 <p className="text-3xl font-black text-gray-900 leading-none mt-1">{calculateDailyPoints(dateKey)}</p>
                </div>
            </div>
-           <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 flex items-center space-x-4">
-               <div className="h-12 w-12 rounded-2xl bg-rose-100 flex items-center justify-center text-rose-600">
-                 <Flame size={22} />
+           <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex items-center space-x-4">
+               <div className="h-14 w-14 rounded-3xl bg-rose-100 flex items-center justify-center text-rose-600">
+                 <Flame size={24} />
                </div>
                <div>
                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Streak</p>
-                 <p className="text-2xl font-black text-gray-900 leading-none mt-1">{getStreak()}</p>
+                 <p className="text-3xl font-black text-gray-900 leading-none mt-1">{getStreak()}</p>
                </div>
            </div>
       </div>
