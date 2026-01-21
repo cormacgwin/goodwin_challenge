@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Habit, Log, Team, ChallengeSettings } from '../types';
-import { Check, Flag, ChevronLeft, ChevronRight, Trophy, Flame, Clock, X, HelpCircle, Banknote, DollarSign, BarChart as BarChartIcon, Settings } from 'lucide-react';
+import { Check, Flag, ChevronLeft, ChevronRight, Trophy, Flame, Clock, X, HelpCircle, Banknote, DollarSign, BarChart as BarChartIcon, Settings, TrendingDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import confetti from 'canvas-confetti';
 
@@ -101,7 +101,24 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
     }, 0);
     const costOfToday = (todayPointsPossible - todayPointsEarned) * valuePerPoint;
 
-    return { valuePerPoint, savedSoFar, currentDebt, costOfToday, dailyPossiblePoints };
+    // Calculate "Lost So Far" - Guaranteed loss from missed habits in the past
+    let lostSoFar = 0;
+    let missedHabitsCount = 0;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    for (let d = new Date(start); d < today; d.setDate(d.getDate() + 1)) {
+      const dKey = getDayKey(d);
+      activeHabitSet.forEach(habit => {
+        const isDone = logs.some(l => l.userId === user.id && l.habitId === habit.id && l.date === dKey && l.completed);
+        if (!isDone) {
+          missedHabitsCount++;
+          lostSoFar += (habit.points * valuePerPoint);
+        }
+      });
+    }
+
+    return { valuePerPoint, savedSoFar, lostSoFar, missedHabitsCount, currentDebt, costOfToday, dailyPossiblePoints };
   }, [settings, habits, userHabits, logs, user.id, dateKey]);
 
   const getChallengeStatus = () => {
@@ -146,18 +163,37 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
 
   const getStreak = () => {
     const today = new Date();
+    today.setHours(0,0,0,0);
     let streak = 0;
     let checkDate = new Date(today);
-    const todayKey = getDayKey(today);
-    if (calculateDailyPoints(todayKey) > 0) streak = 1;
-    checkDate.setDate(checkDate.getDate() - 1);
-    while (true) {
-        const key = getDayKey(checkDate);
-        const hasActivity = logs.some(l => l.userId === user.id && l.date === key);
-        if (hasActivity) {
-            streak++;
-            checkDate.setDate(checkDate.getDate() - 1);
+
+    const isPerfectDay = (date: Date) => {
+      const dKey = getDayKey(date);
+      if (userHabits.length === 0) return false;
+      return userHabits.every(h => 
+        logs.some(l => l.userId === user.id && l.habitId === h.id && l.date === dKey && l.completed)
+      );
+    };
+
+    // Check if today is already perfect
+    if (isPerfectDay(checkDate)) {
+      streak = 1;
+      checkDate.setDate(checkDate.getDate() - 1);
+      while (true) {
+        if (isPerfectDay(checkDate)) {
+          streak++;
+          checkDate.setDate(checkDate.getDate() - 1);
         } else break;
+      }
+    } else {
+      // If today isn't perfect, check if yesterday was to preserve the streak
+      checkDate.setDate(checkDate.getDate() - 1);
+      while (true) {
+        if (isPerfectDay(checkDate)) {
+          streak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else break;
+      }
     }
     return streak;
   };
@@ -296,10 +332,18 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({
                     ${finance.currentDebt.toFixed(2)}
                  </p>
               </div>
-              <div className="mt-4 md:mt-0 md:text-right">
-                 <div className="inline-block bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-sm border border-white/10">
-                    <p className="text-[10px] font-black uppercase text-green-100">Saved So Far</p>
-                    <p className="text-2xl font-black text-white">+${finance.savedSoFar.toFixed(2)}</p>
+              <div className="mt-4 md:mt-0 flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-4">
+                 <div className="bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-sm border border-white/10 text-right">
+                    <p className="text-[10px] font-black uppercase text-green-100 mb-0.5">Saved So Far</p>
+                    <p className="text-xl font-black text-white">+${finance.savedSoFar.toFixed(2)}</p>
+                 </div>
+                 <div className="bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-sm border border-white/10 text-right">
+                    <div className="flex items-center justify-end mb-0.5">
+                      <TrendingDown size={10} className="mr-1 text-red-300" />
+                      <p className="text-[10px] font-black uppercase text-red-100">Lost So Far</p>
+                    </div>
+                    <p className="text-xl font-black text-white">-${finance.lostSoFar.toFixed(2)}</p>
+                    <p className="text-[8px] font-black uppercase text-red-100/70">{finance.missedHabitsCount} habits missed</p>
                  </div>
               </div>
            </div>

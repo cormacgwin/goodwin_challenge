@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Team, User, Log, Habit, ChallengeSettings } from '../types';
-import { Trophy, CheckCircle2, Circle, ChevronRight, Banknote } from 'lucide-react';
+import { Trophy, CheckCircle2, Circle, ChevronRight, Banknote, HelpCircle, X } from 'lucide-react';
 
 interface LeaderboardProps {
   teams: Team[];
@@ -15,6 +15,7 @@ interface LeaderboardProps {
 
 export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, habits, settings, onViewProfile }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showPotInfo, setShowPotInfo] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -22,15 +23,14 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   
-  const getTodayKey = () => {
-    const d = new Date();
+  const getDayKey = (d: Date) => {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
-  const todayKey = getTodayKey();
+  const todayKey = getDayKey(new Date());
 
   const parseLocalDate = (dateStr: string) => {
     if (!dateStr) return new Date();
@@ -38,16 +38,11 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
     return new Date(y, m - 1, d);
   };
 
-  // Pre-calculate finance variables
-  const financeVars = useMemo(() => {
+  const durationDays = useMemo(() => {
     const start = parseLocalDate(settings.startDate);
     const end = parseLocalDate(settings.endDate);
-    const durationDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-    const dailyPossiblePoints = habits.reduce((acc, h) => acc + h.points, 0);
-    const totalPossiblePoints = dailyPossiblePoints * durationDays;
-    const valuePerPoint = totalPossiblePoints > 0 ? settings.stakeAmount / totalPossiblePoints : 0;
-    return { valuePerPoint };
-  }, [settings, habits]);
+    return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  }, [settings.startDate, settings.endDate]);
 
   const getTeamScore = (teamId: string) => {
     const teamMembers = users.filter(u => u.teamId === teamId);
@@ -62,18 +57,57 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
     return score;
   };
 
+  const getUserLostSoFar = (user: User) => {
+    const start = parseLocalDate(settings.startDate);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    const userHabits = habits.filter(h => user.habitIds?.includes(h.id));
+    const activeHabitSet = userHabits.length > 0 ? userHabits : habits;
+    const dailyPossiblePoints = activeHabitSet.reduce((acc, h) => acc + h.points, 0);
+    const totalPossiblePoints = dailyPossiblePoints * durationDays;
+    const valuePerPoint = totalPossiblePoints > 0 ? settings.stakeAmount / totalPossiblePoints : 0;
+
+    let lost = 0;
+    for (let d = new Date(start); d < today; d.setDate(d.getDate() + 1)) {
+        const dKey = getDayKey(d);
+        activeHabitSet.forEach(habit => {
+            const isDone = logs.some(l => l.userId === user.id && l.habitId === habit.id && l.date === dKey && l.completed);
+            if (!isDone) {
+                lost += (habit.points * valuePerPoint);
+            }
+        });
+    }
+    return lost;
+  };
+
+  const totalPot = useMemo(() => {
+    return users.reduce((sum, user) => sum + getUserLostSoFar(user), 0);
+  }, [users, habits, logs, settings, durationDays]);
+
   const getTeamDebt = (teamId: string) => {
     const teamMembers = users.filter(u => u.teamId === teamId);
     let totalTeamDebt = 0;
+
     teamMembers.forEach(member => {
+      const memberHabits = habits.filter(h => member.habitIds?.includes(h.id));
+      const activeHabitSet = memberHabits.length > 0 ? memberHabits : habits;
+      
+      const dailyPossiblePoints = activeHabitSet.reduce((acc, h) => acc + h.points, 0);
+      const totalPossiblePoints = dailyPossiblePoints * durationDays;
+      const userValuePerPoint = totalPossiblePoints > 0 ? settings.stakeAmount / totalPossiblePoints : 0;
+
       const memberLogs = logs.filter(l => l.userId === member.id && l.completed);
       const memberPoints = memberLogs.reduce((acc, log) => {
         const h = habits.find(h => h.id === log.habitId);
         return acc + (h?.points || 0);
       }, 0);
-      const debt = Math.max(0, settings.stakeAmount - memberPoints * financeVars.valuePerPoint);
+
+      const savedSoFar = memberPoints * userValuePerPoint;
+      const debt = Math.max(0, settings.stakeAmount - savedSoFar);
       totalTeamDebt += debt;
     });
+    
     return totalTeamDebt;
   };
 
@@ -96,6 +130,37 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
 
   return (
     <div className="space-y-6">
+      {/* THE CURRENT POT WIDGET - Refined height and matching gradient */}
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-3xl shadow-lg p-5 text-white relative overflow-hidden transition-all">
+        <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+        
+        <div className="relative z-10 flex items-center justify-between">
+           <div>
+              <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-100 mb-1 flex items-center">
+                 <Trophy size={12} className="mr-1.5 text-yellow-400" /> The Current Pot
+              </h2>
+              <p className="text-4xl font-black tracking-tighter text-white">
+                 ${totalPot.toFixed(2)}
+              </p>
+           </div>
+           <button 
+             onClick={() => setShowPotInfo(!showPotInfo)}
+             className={`p-2 rounded-xl transition-all ${showPotInfo ? 'bg-white text-indigo-600' : 'bg-white/10 text-white hover:bg-white/20'}`}
+             aria-label="Info"
+           >
+             {showPotInfo ? <X size={20} /> : <HelpCircle size={20} />}
+           </button>
+        </div>
+
+        {showPotInfo && (
+           <div className="relative z-10 mt-4 p-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+             <p className="text-xs text-indigo-50 font-medium leading-relaxed">
+               This pot represents the total money <strong>already lost</strong> by participants from missed habits. This amount is guaranteed to be paid out to the winner at the end of the challenge.
+             </p>
+           </div>
+        )}
+      </div>
+
       <div className="bg-white p-4 md:p-6 rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
           <Trophy className="mr-2 text-yellow-500" /> Team Standings
@@ -106,8 +171,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ teams, users, logs, ha
               data={chartData} 
               margin={{ 
                 top: 10, 
-                right: isMobile ? 10 : 20, 
-                left: isMobile ? -30 : 0, 
+                right: isMobile ? 0 : 20, 
+                left: isMobile ? -45 : 0, 
                 bottom: isMobile ? -20 : 20 
               }}
             >

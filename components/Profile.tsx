@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { User, Log, Habit, ChallengeSettings } from '../types';
-import { ArrowLeft, Trophy, Flame, TrendingUp, BarChart, Banknote } from 'lucide-react';
+import { ArrowLeft, Trophy, Flame, TrendingUp, BarChart, Banknote, TrendingDown } from 'lucide-react';
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 interface ProfileProps {
@@ -46,15 +46,38 @@ export const Profile: React.FC<ProfileProps> = ({
         return sum + (h?.points || 0);
     }, 0);
 
+    const userHabits = allHabits.filter(h => targetUser.habitIds?.includes(h.id));
+    const activeHabitSet = userHabits.length > 0 ? userHabits : allHabits;
+
+    const isPerfectDay = (date: Date) => {
+      const dKey = getDayKey(date);
+      if (activeHabitSet.length === 0) return false;
+      return activeHabitSet.every(h => 
+        userLogs.some(l => l.habitId === h.id && l.date === dKey)
+      );
+    };
+
     let streak = 0;
     let checkDate = new Date();
-    if (userLogs.some(l => l.date === getDayKey(checkDate))) streak = 1;
-    checkDate.setDate(checkDate.getDate() - 1);
-    while (true) {
-      if (userLogs.some(l => l.date === getDayKey(checkDate))) {
-        streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else break;
+    checkDate.setHours(0,0,0,0);
+    
+    if (isPerfectDay(checkDate)) {
+      streak = 1;
+      checkDate.setDate(checkDate.getDate() - 1);
+      while (true) {
+        if (isPerfectDay(checkDate)) {
+          streak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else break;
+      }
+    } else {
+      checkDate.setDate(checkDate.getDate() - 1);
+      while (true) {
+        if (isPerfectDay(checkDate)) {
+          streak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else break;
+      }
     }
 
     const habitCounts = allHabits.map(habit => {
@@ -77,20 +100,35 @@ export const Profile: React.FC<ProfileProps> = ({
     }
 
     const durationDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-    const activeHabits = targetUser.habitIds && targetUser.habitIds.length > 0 
-      ? allHabits.filter(h => targetUser.habitIds?.includes(h.id))
-      : allHabits;
-
-    const totalPointsPossible = activeHabits.reduce((acc, h) => acc + h.points, 0) * durationDays;
+    const dailyPossiblePoints = activeHabitSet.reduce((acc, h) => acc + h.points, 0);
+    const totalPointsPossible = dailyPossiblePoints * durationDays;
+    const valuePerPoint = totalPointsPossible > 0 ? settings.stakeAmount / totalPointsPossible : 0;
+    
     const userTotalPoints = userLogs.reduce((acc, log) => {
       const h = allHabits.find(h => h.id === log.habitId);
       return acc + (h?.points || 0);
     }, 0);
-    const valuePerPoint = totalPointsPossible > 0 ? settings.stakeAmount / totalPointsPossible : 0;
+    
     const savedSoFar = userTotalPoints * valuePerPoint;
     const currentDebt = Math.max(0, settings.stakeAmount - savedSoFar);
 
-    return { pointsToday, streak, habitCounts, chartData, savedSoFar, currentDebt };
+    // Calculate "Lost So Far" for profile
+    let lostSoFar = 0;
+    let missedHabitsCount = 0;
+    const calcDate = new Date(start);
+    while (calcDate < today) {
+      const dKey = getDayKey(calcDate);
+      activeHabitSet.forEach(habit => {
+        const isDone = userLogs.some(l => l.habitId === habit.id && l.date === dKey);
+        if (!isDone) {
+          missedHabitsCount++;
+          lostSoFar += (habit.points * valuePerPoint);
+        }
+      });
+      calcDate.setDate(calcDate.getDate() + 1);
+    }
+
+    return { pointsToday, streak, habitCounts, chartData, savedSoFar, lostSoFar, missedHabitsCount, currentDebt };
   }, [targetUser, allLogs, allHabits, settings]);
 
   return (
@@ -140,9 +178,19 @@ export const Profile: React.FC<ProfileProps> = ({
                <Banknote size={14} className="mr-2" /> Current Payout
              </h3>
              <p className="text-4xl font-black text-white tracking-tighter mb-4">${stats.currentDebt.toFixed(2)}</p>
-             <div className="bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-sm border border-white/5">
-                <p className="text-[9px] font-black uppercase text-green-100 mb-1">Earned Back</p>
-                <p className="text-xl font-black text-white">+${stats.savedSoFar.toFixed(2)}</p>
+             <div className="space-y-3">
+                <div className="bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-sm border border-white/5">
+                   <p className="text-[9px] font-black uppercase text-green-100 mb-1">Earned Back</p>
+                   <p className="text-xl font-black text-white">+${stats.savedSoFar.toFixed(2)}</p>
+                </div>
+                <div className="bg-white/10 px-4 py-2 rounded-2xl backdrop-blur-sm border border-white/5">
+                   <div className="flex items-center justify-between mb-1">
+                      <p className="text-[9px] font-black uppercase text-red-100">Lost So Far</p>
+                      <TrendingDown size={10} className="text-red-300" />
+                   </div>
+                   <p className="text-xl font-black text-white">-${stats.lostSoFar.toFixed(2)}</p>
+                   <p className="text-[8px] font-black uppercase text-red-100/70">{stats.missedHabitsCount} habits missed</p>
+                </div>
              </div>
           </div>
         </div>
