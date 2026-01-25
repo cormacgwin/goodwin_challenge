@@ -10,16 +10,22 @@ export const dataProvider = {
     const [
       { data: habits },
       { data: teamsData },
-      { data: logsData },
+      // Order logs by date descending so we always get the newest data first
+      // We still fetch a large amount, but sorting makes it robust
+      { data: logsData, error: logsError },
       { data: settingsData },
       { data: profilesData }
     ] = await Promise.all([
       supabase.from('habits').select('*'),
       supabase.from('teams').select('*').order('order_index', { ascending: true }),
-      supabase.from('logs').select('*'),
+      supabase.from('logs').select('*').order('date', { ascending: false }).limit(5000),
       supabase.from('settings').select('*').single(),
       supabase.from('profiles').select('*')
     ]);
+
+    if (logsError) {
+      console.error("Supabase Error fetching logs:", logsError.message);
+    }
 
     // Map DB snake_case to App camelCase
     const logs: Log[] = (logsData || []).map((l: any) => ({
@@ -107,8 +113,6 @@ export const dataProvider = {
   },
 
   async updateUserHabits(userId: string, habitIds: string[]) {
-    // To ensure persistence without schema changes, we fetch the current display name 
-    // and store the JSON-stringified IDs as a hidden suffix.
     const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).single();
     let pureName = (profile?.name || '').split(HABIT_SEP)[0].trim();
     const encodedName = `${pureName}${HABIT_SEP}${JSON.stringify(habitIds)}`;
@@ -192,7 +196,6 @@ export const dataProvider = {
   },
 
   async updateUserName(userId: string, newPureName: string) {
-    // Preserve existing habit encoding when updating name
     const { data: profile } = await supabase.from('profiles').select('name').eq('id', userId).single();
     const habitData = (profile?.name || '').split(HABIT_SEP)[1];
     const encodedName = habitData ? `${newPureName.trim()}${HABIT_SEP}${habitData}` : newPureName.trim();
@@ -212,15 +215,19 @@ export const dataProvider = {
   async toggleLog(userId: string, habitId: string, date: string, currentLogs: Log[]) {
     const existing = currentLogs.find(l => l.userId === userId && l.habitId === habitId && l.date === date);
     if (existing) {
-      await supabase.from('logs').delete().eq('id', existing.id);
+      const { error } = await supabase.from('logs').delete().eq('id', existing.id);
+      if (error) console.error("Error deleting log:", error.message);
     } else {
-      await supabase.from('logs').insert({
+      // Use upsert instead of insert to be more resilient to state mismatches
+      // Note: This requires the 'id' column to be the Primary Key in Supabase
+      const { error } = await supabase.from('logs').upsert({
         id: `${userId}-${habitId}-${date}`, 
         user_id: userId,
         habit_id: habitId,
         date: date,
         completed: true
       });
+      if (error) console.error("Error saving log:", error.message);
     }
     return this.getInitialState();
   }
