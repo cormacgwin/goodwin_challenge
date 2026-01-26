@@ -10,15 +10,15 @@ export const dataProvider = {
     const [
       { data: habits },
       { data: teamsData },
-      // Order logs by date descending so we always get the newest data first
-      // We still fetch a large amount, but sorting makes it robust
+      // Increase limit to 20,000 and order by date descending
+      // This ensures current data is never 'pushed out' by old data
       { data: logsData, error: logsError },
       { data: settingsData },
       { data: profilesData }
     ] = await Promise.all([
       supabase.from('habits').select('*'),
       supabase.from('teams').select('*').order('order_index', { ascending: true }),
-      supabase.from('logs').select('*').order('date', { ascending: false }).limit(5000),
+      supabase.from('logs').select('*').order('date', { ascending: false }).limit(20000),
       supabase.from('settings').select('*').single(),
       supabase.from('profiles').select('*')
     ]);
@@ -37,7 +37,6 @@ export const dataProvider = {
     }));
 
     const users: User[] = (profilesData || []).map((p: any) => {
-      // Decode habit selection from name if present
       let displayName = p.name || '';
       let habitIds: string[] = [];
       
@@ -121,9 +120,7 @@ export const dataProvider = {
       name: encodedName
     }).eq('id', userId);
     
-    if (error) {
-      console.error('Error saving user habits:', error.message);
-    }
+    if (error) console.error('Error saving user habits:', error.message);
     return this.getInitialState();
   },
 
@@ -134,8 +131,7 @@ export const dataProvider = {
   },
 
   async removeHabit(id: string) {
-    const { error: logError } = await supabase.from('logs').delete().eq('habit_id', id);
-    if (logError) console.error('Error removing associated logs:', logError.message);
+    await supabase.from('logs').delete().eq('habit_id', id);
     const { error } = await supabase.from('habits').delete().eq('id', id);
     if (error) console.error('Error removing habit:', error.message);
     return this.getInitialState();
@@ -212,23 +208,37 @@ export const dataProvider = {
     return null;
   },
 
-  async toggleLog(userId: string, habitId: string, date: string, currentLogs: Log[]) {
-    const existing = currentLogs.find(l => l.userId === userId && l.habitId === habitId && l.date === date);
-    if (existing) {
-      const { error } = await supabase.from('logs').delete().eq('id', existing.id);
-      if (error) console.error("Error deleting log:", error.message);
+  async toggleLog(userId: string, habitId: string, date: string, isCompleted: boolean) {
+    // Generate a predictable unique ID for the log to prevent duplicates
+    const logId = `${userId}-${habitId}-${date}`;
+    
+    if (isCompleted) {
+      // Deleting a log
+      const { error } = await supabase.from('logs').delete().eq('id', logId);
+      if (error) throw error;
+      return { type: 'delete', id: logId };
     } else {
-      // Use upsert instead of insert to be more resilient to state mismatches
-      // Note: This requires the 'id' column to be the Primary Key in Supabase
-      const { error } = await supabase.from('logs').upsert({
-        id: `${userId}-${habitId}-${date}`, 
+      // Adding a log
+      const newLog = {
+        id: logId, 
         user_id: userId,
         habit_id: habitId,
         date: date,
         completed: true
-      });
-      if (error) console.error("Error saving log:", error.message);
+      };
+      // Upsert ensures that if the record exists (e.g. from another session), it just updates it
+      const { error } = await supabase.from('logs').upsert(newLog);
+      if (error) throw error;
+      return { 
+        type: 'insert', 
+        log: {
+          id: logId,
+          userId: userId,
+          habitId: habitId,
+          date: date,
+          completed: true
+        }
+      };
     }
-    return this.getInitialState();
   }
 };

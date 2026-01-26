@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { dataProvider } from './services/dataProvider';
 import { supabase } from './services/supabaseClient';
-import { User, Role, AppState } from './types';
+import { User, Role, AppState, Log } from './types';
 import { Auth } from './components/Auth';
 import { Layout } from './components/Layout';
 import { HabitTracker } from './components/HabitTracker';
@@ -73,6 +73,45 @@ const App: React.FC = () => {
     setCurrentView('profile');
   };
 
+  const handleToggleHabit = async (habitId: string, date: string) => {
+    if (!state?.currentUser || !state) return;
+
+    const userId = state.currentUser.id;
+    const existingLog = state.logs.find(l => l.userId === userId && l.habitId === habitId && l.date === date);
+    
+    // --- OPTIMISTIC UI UPDATE ---
+    // We update the local state immediately so the user sees the checkmark.
+    // We do NOT wait for the database or re-fetch the entire state.
+    const previousLogs = [...state.logs];
+    let newLogs: Log[];
+
+    if (existingLog) {
+      newLogs = state.logs.filter(l => l.id !== existingLog.id);
+    } else {
+      const tempLog: Log = {
+        id: `${userId}-${habitId}-${date}`,
+        userId,
+        habitId,
+        date,
+        completed: true
+      };
+      newLogs = [tempLog, ...state.logs];
+    }
+
+    setState({ ...state, logs: newLogs });
+
+    // --- ASYNC BACKGROUND SYNC ---
+    try {
+      await dataProvider.toggleLog(userId, habitId, date, !!existingLog);
+      // Success - no further action needed as state is already 'optimistically' updated
+    } catch (error) {
+      console.error("Sync failed, rolling back:", error);
+      // ROLLBACK on failure
+      setState({ ...state, logs: previousLogs });
+      alert("Something went wrong saving your point. Please check your connection.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -106,11 +145,7 @@ const App: React.FC = () => {
           logs={state.logs}
           userTeam={state.teams.find(t => t.id === state.currentUser?.teamId)}
           settings={state.settings}
-          onToggleHabit={async (habitId, date) => {
-            if (!state.currentUser) return;
-            const newState = await dataProvider.toggleLog(state.currentUser.id, habitId, date, state.logs);
-            setState(newState);
-          }}
+          onToggleHabit={handleToggleHabit}
           onNavigate={setCurrentView}
         />
       )}
@@ -135,8 +170,8 @@ const App: React.FC = () => {
           settings={state.settings}
           onUpdateAvatar={async (url) => {
             if (!state.currentUser) return;
-            const newState = await dataProvider.updateUserAvatar(state.currentUser.id, url);
-            setState(newState);
+            await dataProvider.updateUserAvatar(state.currentUser.id, url);
+            await fetchData();
           }}
           onBack={() => {
             setCurrentView('leaderboard');
@@ -151,18 +186,18 @@ const App: React.FC = () => {
           allHabits={state.habits}
           onUpdateName={async (name) => {
             if (!state.currentUser) return;
-            const newState = await dataProvider.updateUserName(state.currentUser.id, name);
-            setState(newState);
+            await dataProvider.updateUserName(state.currentUser.id, name);
+            await fetchData();
           }}
           onUpdateAvatar={async (url) => {
             if (!state.currentUser) return;
-            const newState = await dataProvider.updateUserAvatar(state.currentUser.id, url);
-            setState(newState);
+            await dataProvider.updateUserAvatar(state.currentUser.id, url);
+            await fetchData();
           }}
           onUpdateHabits={async (hids) => {
             if (!state.currentUser) return;
-            const newState = await dataProvider.updateUserHabits(state.currentUser.id, hids);
-            setState(newState);
+            await dataProvider.updateUserHabits(state.currentUser.id, hids);
+            await fetchData();
             setCurrentView('dashboard');
           }}
           onDeleteAccount={async () => {
@@ -180,32 +215,32 @@ const App: React.FC = () => {
           teams={state.teams}
           users={state.users}
           onUpdateSettings={async (s) => {
-            const newState = await dataProvider.updateSettings(s);
-            setState(newState);
+            await dataProvider.updateSettings(s);
+            await fetchData();
           }}
           onAddHabit={async (h) => {
-            const newState = await dataProvider.addHabit(h);
-            setState(newState);
+            await dataProvider.addHabit(h);
+            await fetchData();
           }}
           onRemoveHabit={async (id) => {
-            const newState = await dataProvider.removeHabit(id);
-            setState(newState);
+            await dataProvider.removeHabit(id);
+            await fetchData();
           }}
           onUpdateUserTeam={async (uid, tid) => {
-            const newState = await dataProvider.updateUserTeam(uid, tid);
-            setState(newState);
+            await dataProvider.updateUserTeam(uid, tid);
+            await fetchData();
           }}
           onAddTeam={async (team) => {
-            const newState = await dataProvider.addTeam(team);
-            setState(newState);
+            await dataProvider.addTeam(team);
+            await fetchData();
           }}
           onRemoveTeam={async (id) => {
-            const newState = await dataProvider.removeTeam(id);
-            setState(newState);
+            await dataProvider.removeTeam(id);
+            await fetchData();
           }}
           onUpdateTeam={async (team) => {
-            const newState = await dataProvider.updateTeam(team);
-            setState(newState);
+            await dataProvider.updateTeam(team);
+            await fetchData();
           }}
         />
       )}
